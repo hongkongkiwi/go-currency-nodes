@@ -1,27 +1,45 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/urfave/cli/v2" // imports as package "cli"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 const cli_version = "0.0.1"
 
-func nodeVersion() error {
-	fmt.Println("nodeVersion: NOT IMPLEMENTED")
+var conn *grpc.ClientConn
+
+func nodeVersion(nodeAddr string) error {
+	connectErr := connect(nodeAddr)
+	if connectErr != nil {
+		return connectErr
+	}
+	c := pb.NewGreeterClient(conn)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Millisecond*80))
+	defer cancel()
+
+	r, err := c.SayHello(ctx, &pb.HelloRequest{Name: *name})
+	if err != nil {
+		return fmt.Errorf("could not greet: %v", err)
+	}
+
 	return nil
 }
 
 func nodeUuid() error {
-	fmt.Println("nodeUuid: NOT IMPLEMENTED")
+	log.Println("nodeUuid: NOT IMPLEMENTED")
 	return nil
 }
 
 func nodeStatus() error {
-	fmt.Println("nodeStatus: NOT IMPLEMENTED")
+	log.Println("nodeStatus: NOT IMPLEMENTED")
 	return nil
 }
 
@@ -31,37 +49,35 @@ func nodeSubscriptions() error {
 }
 
 func nodeSubscriptionsSync() error {
-	fmt.Println("nodeSubscriptionsSync: NOT IMPLEMENTED")
+	log.Println("nodeSubscriptionsSync: NOT IMPLEMENTED")
 	return nil
 }
 
 func nodePriceRefresh() error {
-	fmt.Println("nodePriceRefresh: NOT IMPLEMENTED")
+	log.Println("nodePriceRefresh: NOT IMPLEMENTED")
 	return nil
 }
 
 func nodeLog() error {
-	fmt.Println("nodeLog: NOT IMPLEMENTED")
+	log.Println("nodeLog: NOT IMPLEMENTED")
 	return nil
 }
 
 func nodeUpdatesPause() error {
-	fmt.Println("nodeUpdatesPause: NOT IMPLEMENTED")
+	log.Println("nodeUpdatesPause: NOT IMPLEMENTED")
 	return nil
 }
 
 func nodeUpdatesResume() error {
-	fmt.Println("nodeUpdatesResume: NOT IMPLEMENTED")
+	log.Println("nodeUpdatesResume: NOT IMPLEMENTED")
 	return nil
 }
 
-func nodeControllerConnect() error {
-	fmt.Println("nodeControllerConnect: NOT IMPLEMENTED")
+func nodeControllerConnect(nodeAddress string) error {
 	return nil
 }
 
 func nodeControllerDisconnect() error {
-	fmt.Println("nodeControllerDisconnect: NOT IMPLEMENTED")
 	return nil
 }
 
@@ -70,40 +86,28 @@ func nodeKill() error {
 	return nil
 }
 
+func disconnect() error {
+	return conn.Close()
+}
+
+func connect(nodeAddress string) error {
+	// Set up a connection to the server.
+	var err error
+	conn, err = grpc.Dial(nodeAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func cliVersion() error {
 	fmt.Println("version:", cli_version)
-	return nil
-}
-
-func cliConnectNode() error {
-	fmt.Println("cliConnectNode: NOT IMPLEMENTED")
-	return nil
-}
-
-func cliDisconnectNode() error {
-	fmt.Println("cliDisconnectNode: NOT IMPLEMENTED")
 	return nil
 }
 
 func main() {
 	app := &cli.App{
 		Commands: []*cli.Command{
-			{
-				Name:    "connect",
-				Aliases: []string{"c"},
-				Usage:   "connect to node",
-				Action: func(cCtx *cli.Context) error {
-					return cliConnectNode()
-				},
-			},
-			{
-				Name:    "disconnect",
-				Aliases: []string{"d"},
-				Usage:   "disconnect from node",
-				Action: func(cCtx *cli.Context) error {
-					return cliDisconnectNode()
-				},
-			},
 			{
 				Name:    "version",
 				Aliases: []string{"v"},
@@ -116,6 +120,13 @@ func main() {
 				Name:    "node",
 				Aliases: []string{"n"},
 				Usage:   "options for node control",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:  "addr",
+						Value: "127.0.0.1:5051",
+						Usage: "address of the node",
+					},
+				},
 				Subcommands: []*cli.Command{
 					{
 						Name:    "uuid",
@@ -143,7 +154,8 @@ func main() {
 								Aliases: []string{"v"},
 								Usage:   "show the node app version",
 								Action: func(cCtx *cli.Context) error {
-									return nodeVersion()
+									nodeAddr := cCtx.String("addr")
+									return nodeVersion(nodeAddr)
 								},
 							},
 							{
@@ -228,7 +240,7 @@ func main() {
 								Aliases: []string{"c"},
 								Usage:   "ask node to connect to controller",
 								Action: func(cCtx *cli.Context) error {
-									return nodeControllerConnect()
+									return nodeControllerConnect("abc")
 								},
 							},
 							{

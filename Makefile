@@ -1,17 +1,16 @@
 all: proto_gen build
 
+gen: proto_gen
+
 proto_gen:
-	@mkdir -p internal/pb
-	protoc --proto_path=./proto proto/*.proto --go_out=:internal/pb --go-grpc_out=:internal/pb
+	@mkdir -p pb
+	protoc --proto_path=./proto proto/*.proto --go_out=:pb --go-grpc_out=:pb
 
-cli:
-	go run github.com/hongkongkiwi/go-currency-nodes/cmd/cli
+cli: build_cli
 
-controller:
-	go run github.com/hongkongkiwi/go-currency-nodes/cmd/controller
+controller: build_controller
 
-node:
-	go run github.com/hongkongkiwi/go-currency-nodes/cmd/node
+node: build_node
 
 build: build_cli build_controller build_node
 
@@ -31,6 +30,6 @@ build_node:
 # 	go run cmd/server/main.go -port 50051
 
 clean:
-	 rm -Rf internal/pb/* build/*
+	 rm -Rf pb/* build/*
 
-.PHONY: all proto_gen build build_cli build_controller build_node clean
+.PHONY: all gen proto_gen build build_cli build_controller build_node clean cli node controller

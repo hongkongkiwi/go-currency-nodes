@@ -1,49 +1,146 @@
-package cmd
+package main
 
-func main() {
-}
+import (
+	"fmt"
+	"log"
+	"os"
+	"os/signal"
+	"strings"
+	"sync"
+	"syscall"
 
-// // Package main implements a server for Greeter service.
-// package main
+	"github.com/gofrs/uuid/v5"
+	helpers "github.com/hongkongkiwi/go-currency-nodes/internal/helpers"
+	nodeClient "github.com/hongkongkiwi/go-currency-nodes/internal/node_client"
+	nodeServer "github.com/hongkongkiwi/go-currency-nodes/internal/node_server"
+	"github.com/tebeka/atexit"
+	"github.com/urfave/cli/v2" // imports as package "cli"
+)
 
-// import (
-// 	"context"
-// 	"flag"
-// 	"fmt"
-// 	"log"
-// 	"net"
-
-// 	"google.golang.org/grpc"
-// 	pb "google.golang.org/grpc/examples/helloworld/helloworld"
-// )
-
-// var (
-// 	port = flag.Int("port", 50051, "Control server port")
-// )
-
-// // server is used to implement helloworld.GreeterServer.
-// type server struct {
-// 	pb.UnimplementedGreeterServer
-// }
-
-// // SayHello implements helloworld.GreeterServer
+// SayHello implements helloworld.GreeterServer
 // func (s *server) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
 // 	log.Printf("Received: %v", in.GetName())
 // 	return &pb.HelloReply{Message: "Hello " + in.GetName()}, nil
 // }
 
-// func main() {
-// 	flag.Parse()
-// 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
-// 	if err != nil {
-// 		log.Fatalf("failed to listen: %v", err)
-// 	}
-// 	s := grpc.NewServer()
+func nodeVersion() error {
+	fmt.Printf("version: %s\n", nodeServer.NodeVersion)
+	return nil
+}
 
-// 	pb.RegisterGreeterServer(s, &server{})
+func multiSignalHandler(signal os.Signal) {
+	switch signal {
+	// case syscall.SIGHUP:
+	// 	// Reload config here
+	case syscall.SIGINT:
+		log.Println("Signal:", signal.String())
+		atexit.Exit(0)
+	case syscall.SIGTERM:
+		log.Println("Signal:", signal.String())
+		atexit.Exit(0)
+	case syscall.SIGQUIT:
+		log.Println("Signal:", signal.String())
+		atexit.Exit(0)
+	}
+}
 
-// 	log.Printf("node command server listening at %v", lis.Addr())
-// 	if err := s.Serve(lis); err != nil {
-// 		log.Fatalf("failed to serve: %v", err)
-// 	}
-// }
+func gracefulExitHandler() {
+	nodeServer.Stop()
+	nodeClient.Stop()
+	log.Println("Exiting ...")
+}
+
+func nodeStart() error {
+	var wg sync.WaitGroup
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan)
+	atexit.Register(gracefulExitHandler)
+	wg.Add(2)
+	go nodeServer.Start(&wg, helpers.NodeCfg.ListenAddr)
+	go nodeClient.Start(&wg, helpers.NodeCfg.ControllerAddr)
+	// Handle exit signals
+	go func() {
+		for {
+			s := <-sigChan
+			multiSignalHandler(s)
+		}
+	}()
+	// Wait for our important stuff
+	wg.Wait()
+	return nil
+}
+
+func fallbackEnv(argValue, envKey string) string {
+	if argValue == "" {
+		if envValue, envOk := os.LookupEnv(envKey); envOk && envValue != "" {
+			return envValue
+		}
+	}
+	return argValue
+}
+
+func main() {
+	app := &cli.App{
+		Commands: []*cli.Command{
+			{
+				Name:    "version",
+				Aliases: []string{"v"},
+				Usage:   "display node app version",
+				Action: func(cCtx *cli.Context) error {
+					return nodeVersion()
+				},
+			},
+			{
+				Name:    "start",
+				Aliases: []string{"v"},
+				Usage:   "starts the server",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:  "listenAddr",
+						Value: "127.0.0.1:5051",
+						Usage: "listen address for control commands (NODE_LISTEN_ADDR)",
+					},
+					&cli.StringFlag{
+						Name:  "controllerAddr",
+						Value: "127.0.0.1:5052",
+						Usage: "controller connect addrss (NODE_CONTROLLER_ADDR)",
+					},
+					&cli.StringFlag{
+						Name:  "uuid",
+						Value: "",
+						Usage: "uuid for this node (NODE_UUID)",
+					},
+					&cli.StringFlag{
+						Name:  "name",
+						Value: "",
+						Usage: "name for this node (NODE_NAME)",
+					},
+					&cli.StringFlag{
+						Name:  "currencyPairs",
+						Value: "USD_HKD,HKD_USD,USD_NZD,NZD_USD",
+						Usage: "currencyPairs for this node (NODE_CURRENCY_PAIRS)",
+					},
+				},
+				Action: func(cCtx *cli.Context) error {
+					helpers.NodeCfg.ListenAddr = fallbackEnv(cCtx.String("listenAddr"), "NODE_LISTEN_ADDR")
+					helpers.NodeCfg.ControllerAddr = fallbackEnv(cCtx.String("controllerAddr"), "NODE_CONTROLLER_ADDR")
+					helpers.NodeCfg.Name = fallbackEnv(cCtx.String("name"), "NODE_NAME")
+					nodeUuid := fallbackEnv(cCtx.String("nodeUuid"), "NODE_UUID")
+					helpers.NodeCfg.CurrencyPairs = strings.Split(fallbackEnv(cCtx.String("currencyPairs"), "NODE_CURRENCY_PAIRS"), ",")
+					if nodeUuid != "" {
+						helpers.NodeCfg.UUID = uuid.Must(uuid.FromString(nodeUuid))
+					} else {
+						atexit.Fatal("no --nodeUuid or env NODE_UUID!")
+					}
+					log.Printf("node uuid: %s", helpers.NodeCfg.UUID)
+					log.Printf("node currency pairs: %s", helpers.NodeCfg.CurrencyPairs)
+					return nodeStart()
+				},
+			},
+		},
+	}
+
+	if err := app.Run(os.Args); err != nil {
+		atexit.Fatal(err)
+	}
+}

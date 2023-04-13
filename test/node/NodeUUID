@@ -1,0 +1,2 @@
+#!/bin/sh
+grpcurl -plaintext 127.0.0.1:5051 protobuf.NodeControlCommands.NodeUUID

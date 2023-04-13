@@ -4,11 +4,10 @@ package protobuf;
 // import "google/protobuf/empty.proto";
 // import "google/protobuf/timestamp.proto";
 import "currency_helpers.proto";
-
-option go_package = "github.com/hongkongkiwi/go-currency-nodes/internal";
+option go_package = "./";
 
 message CurrencyPriceReq {
-  repeated CurrencyPair currency_pairs = 1;
+  repeated string currency_pairs = 1;
 }
 
 message CurrencyPriceReply {
@@ -24,11 +23,11 @@ message CurrencyUpdatePriceReply {
 }
 
 message CurrencySubscribeReq {
-  repeated CurrencyPair currency_pairs = 1;
+  repeated string currency_pairs = 1;
 }
 
 message CurrencySubscribeReply {
-  repeated CurrencyPair currency_pairs = 1;
+  repeated string currency_pairs = 1;
 }
 
 service ControllerPriceCommands {
