@@ -1,0 +1,3 @@
+internal/pb/**
+*.pb.go
+build/**

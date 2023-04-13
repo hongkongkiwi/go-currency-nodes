@@ -1,0 +1,97 @@
+syntax = "proto3";
+package protobuf;
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+import "currency_helpers.proto";
+
+option go_package = "github.com/hongkongkiwi/go-currency-nodes/internal";
+
+message NodeStatusReply {
+  repeated NodeStatusItem node_statuses = 1;
+}
+
+message NodeStatusItem {
+  string node_uuid = 1; // uuid of this node
+  string node_name = 2; // friendly name of this node
+  string node_version = 3; // app version of this node
+  enum NodeStreamState {
+    READY = 0;
+    PAUSED = 1;
+  }
+  NodeStreamState node_updates_stream_state = 4;
+  string controller_server = 5;
+  message NodeConnectionState {
+    enum ConnectionState {
+      DISCONNECTED = 0;
+      CONNECTED = 1;
+      ERROR = 2;
+    }
+    ConnectionState connection_state = 1;
+    optional string connected_controller_server = 2;
+    optional string connection_error = 3;
+    optional google.protobuf.Timestamp connected_at = 4;
+    optional google.protobuf.Timestamp disconnected_at = 5;
+  }
+  NodeConnectionState connection_state = 6;
+  repeated CurrencyItem currency_items = 7;
+}
+
+message NodeUUIDReply {
+  string node_uuid = 1;
+  string node_name = 2;
+}
+
+message NodeSubscriptionsReply {
+  repeated CurrencyPair currency_pairs = 1; 
+}
+
+message NodeAppLogReply {
+  string log = 1;
+}
+
+message NodeCurrenciesForceUpdateReq {
+  repeated CurrencyPair currency_pairs = 1; 
+}
+
+service NodeControlCommands {
+  // Get this nodes UUID and name
+  rpc NodeUUID (google.protobuf.Empty) returns (NodeUUIDReply) {}
+  // Get this nodes full status
+  rpc NodeStatus (google.protobuf.Empty) returns (NodeStatusReply) {}
+  // Pause updates of currencies to controller
+  rpc NodeUpdatesPause (google.protobuf.Empty) returns (google.protobuf.Empty) {}
+  // Resume updates of currencies to controller
+  rpc NodeUpdatesResume (google.protobuf.Empty) returns (google.protobuf.Empty) {}
+  // Forces an update of the local currency value to the server
+  rpc NodeUpdatesForce (NodeCurrenciesForceUpdateReq) returns (google.protobuf.Empty) {}
+  // Get a list of all currencies defined in our config and their latest knwn prices
+  rpc NodeCurrencies (google.protobuf.Empty) returns (NodeSubscriptionsReply) {}
+  // Sync our list of currencies defined in our config file
+  rpc NodeCurrenciesSyncWithConfig (google.protobuf.Empty) returns (NodeSubscriptionsReply) {}
+  // Force a refresh of our local currency values
+  rpc NodeCurrenciesRefreshCache (google.protobuf.Empty) returns (google.protobuf.Empty) {}
+  // Ask the node to connect manually
+  rpc NodeControllerConnect(google.protobuf.Empty) returns (google.protobuf.Empty) {}
+  // Ask the node to disconnect manually (will not reconnect until commanded or restarted)
+  rpc NodeControllerDisconnect(google.protobuf.Empty) returns (google.protobuf.Empty) {}
+  // Grab our app log
+  rpc NodeAppLog (google.protobuf.Empty) returns (NodeAppLogReply) {}
+  // Kill the app
+  rpc NodeAppKill (google.protobuf.Empty) returns (google.protobuf.Empty) {}
+}
+
+message CurrencyPriceEventReq {
+  repeated CurrencyItem currency_items = 1;
+}
+
+message CurrencySubscriptionsEventReq {
+  repeated CurrencyItem currency_items = 1;
+}
+
+service NodePriceEvents {
+  // Controller calls this on node when a new price comes in
+  rpc CurrencyPriceEvent (CurrencyPriceEventReq) returns (google.protobuf.Empty) {}
+  // Controller calls this when subscriptions change
+  rpc CurrencySubscriptionsEvent (CurrencySubscriptionsEventReq) returns (google.protobuf.Empty) {}
+}

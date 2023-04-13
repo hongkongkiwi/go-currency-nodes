@@ -1,0 +1,41 @@
+syntax = "proto3";
+package protobuf;
+
+// import "google/protobuf/empty.proto";
+// import "google/protobuf/timestamp.proto";
+import "currency_helpers.proto";
+
+option go_package = "github.com/hongkongkiwi/go-currency-nodes/internal";
+
+message CurrencyPriceReq {
+  repeated CurrencyPair currency_pairs = 1;
+}
+
+message CurrencyPriceReply {
+  repeated CurrencyItem currency_items = 1;
+}
+
+message CurrencyUpdatePriceReq {
+  repeated CurrencyItem currency_items = 1;
+}
+
+message CurrencyUpdatePriceReply {
+  repeated CurrencyItem currency_items = 1;
+}
+
+message CurrencySubscribeReq {
+  repeated CurrencyPair currency_pairs = 1;
+}
+
+message CurrencySubscribeReply {
+  repeated CurrencyPair currency_pairs = 1;
+}
+
+service ControllerPriceCommands {
+  // Manually get the price of one or more currencies
+  rpc CurrencyPrice (CurrencyPriceReq) returns (CurrencyGetPriceReply) {}
+  // Update the price of one or more currenices(normally sent 1 at a time but can be batched)
+  rpc CurrencyUpdatePrice (CurrencyUpdatePriceReq) returns (CurrencyUpdatePriceReply) {}
+  // Subscribe to currency updates 
+  rpc CurrencySubscribe (CurrencySubscribeReq) returns (CurrencySubscribeReply) {}
+}

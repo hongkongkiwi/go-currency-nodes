@@ -1,0 +1,44 @@
+syntax = "proto3";
+package protobuf;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/hongkongkiwi/go-currency-nodes/internal";
+
+enum CurrencyPair {
+  ERROR = 0;
+  USD_HKD = 1;
+  HKD_USD = 2;
+  USD_NZD = 3;
+  NZD_USD = 4;
+  USD_AUD = 5;
+  AUD_USD = 6;
+}
+
+message CurrencyItem {
+  CurrencyPair currency_pair = 1;
+  float price = 2;
+  google.protobuf.Timestamp price_valid_at = 3;
+}
+
+message CurrencyGetPriceRequest {
+  repeated CurrencyPair currency_pairs = 1;
+}
+
+message CurrencyGetPriceReply {
+  repeated CurrencyItem currency_items = 1;
+}
+
+message CurrencySyncPriceRequest {
+  repeated CurrencyPair currency_pairs = 1;
+}
+
+message CurrencySubscribeRequest {
+  repeated CurrencyPair currency_pairs = 1;
+}
+
+message CurrencyGetSubscriptionsReply {
+  repeated CurrencyItem currency_items = 1;
+}
+
+
