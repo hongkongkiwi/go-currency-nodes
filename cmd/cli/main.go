@@ -1,40 +1,23 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"os"
-	"time"
 
+	cliClient "github.com/hongkongkiwi/go-currency-nodes/internal/cli_client"
 	"github.com/urfave/cli/v2" // imports as package "cli"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 const cli_version = "0.0.1"
 
-var conn *grpc.ClientConn
-
 func nodeVersion(nodeAddr string) error {
-	connectErr := connect(nodeAddr)
-	if connectErr != nil {
-		return connectErr
-	}
-	c := pb.NewGreeterClient(conn)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(time.Millisecond*80))
-	defer cancel()
-
-	r, err := c.SayHello(ctx, &pb.HelloRequest{Name: *name})
-	if err != nil {
-		return fmt.Errorf("could not greet: %v", err)
-	}
-
+	return cliClient.NodeUUID()
 	return nil
 }
 
 func nodeUuid() error {
-	log.Println("nodeUuid: NOT IMPLEMENTED")
+	return cliClient.NodeUUID()
 	return nil
 }
 
@@ -73,11 +56,13 @@ func nodeUpdatesResume() error {
 	return nil
 }
 
-func nodeControllerConnect(nodeAddress string) error {
+func nodeControllerConnect(controllerAddress string) error {
+	fmt.Println("nodeControllerConnect: NOT IMPLEMENTED")
 	return nil
 }
 
 func nodeControllerDisconnect() error {
+	fmt.Println("nodeControllerDisconnect: NOT IMPLEMENTED")
 	return nil
 }
 
@@ -86,23 +71,18 @@ func nodeKill() error {
 	return nil
 }
 
-func disconnect() error {
-	return conn.Close()
-}
-
-func connect(nodeAddress string) error {
-	// Set up a connection to the server.
-	var err error
-	conn, err = grpc.Dial(nodeAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 func cliVersion() error {
 	fmt.Println("version:", cli_version)
 	return nil
+}
+
+func fallbackEnv(argValue, envKey string) string {
+	if argValue == "" {
+		if envValue, envOk := os.LookupEnv(envKey); envOk && envValue != "" {
+			return envValue
+		}
+	}
+	return argValue
 }
 
 func main() {
@@ -124,7 +104,7 @@ func main() {
 					&cli.StringFlag{
 						Name:  "addr",
 						Value: "127.0.0.1:5051",
-						Usage: "address of the node",
+						Usage: "address of the node to connect to [NODE_REMOTE_ADDR]",
 					},
 				},
 				Subcommands: []*cli.Command{
@@ -133,6 +113,7 @@ func main() {
 						Aliases: []string{"u"},
 						Usage:   "show the node app uuid",
 						Action: func(cCtx *cli.Context) error {
+							cliClient.NodeAddr = fallbackEnv(cCtx.String("addr"), "NODE_REMOTE_ADDR")
 							return nodeUuid()
 						},
 					},

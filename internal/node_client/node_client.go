@@ -7,9 +7,9 @@ import (
 
 func Start(wg *sync.WaitGroup, controllerAddr string) {
 	defer wg.Done()
-	log.Println("starting client")
+	log.Println("starting controller client")
 }
 
 func Stop() {
-	log.Println("client stopped")
+	log.Println("controller client stopped")
 }
