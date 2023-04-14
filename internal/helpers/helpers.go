@@ -31,6 +31,14 @@ type NodeConfigStore struct {
 	CurrencyPairs  []string
 }
 
+type ControllerConfigStore struct {
+	ListenAddr string
+}
+
 var NodeCfg NodeConfigStore
-var PriceStore *kvs.KeyValueStore
-var PriceUpdatesState int = PriceUpdatesReady
+var NodePriceStore *kvs.KeyValueStore
+var NodePriceUpdatesState int = PriceUpdatesReady
+
+var ControllerCfg ControllerConfigStore
+var ControllerSubscriptionsStore *kvs.KeyValueStore
+var ControllerPriceStore *kvs.KeyValueStore

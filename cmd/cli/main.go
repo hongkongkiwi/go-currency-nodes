@@ -4,79 +4,24 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
+	"time"
 
 	cliClient "github.com/hongkongkiwi/go-currency-nodes/internal/cli_client"
 	"github.com/urfave/cli/v2" // imports as package "cli"
 )
 
 const cli_version = "0.0.1"
-
-func nodeVersion(nodeAddr string) error {
-	return cliClient.NodeUUID()
-	return nil
-}
-
-func nodeUuid() error {
-	return cliClient.NodeUUID()
-	return nil
-}
-
-func nodeStatus() error {
-	log.Println("nodeStatus: NOT IMPLEMENTED")
-	return nil
-}
-
-func nodeSubscriptions() error {
-	fmt.Println("nodeSubscriptions: NOT IMPLEMENTED")
-	return nil
-}
-
-func nodeSubscriptionsSync() error {
-	log.Println("nodeSubscriptionsSync: NOT IMPLEMENTED")
-	return nil
-}
-
-func nodePriceRefresh() error {
-	log.Println("nodePriceRefresh: NOT IMPLEMENTED")
-	return nil
-}
-
-func nodeLog() error {
-	log.Println("nodeLog: NOT IMPLEMENTED")
-	return nil
-}
-
-func nodeUpdatesPause() error {
-	log.Println("nodeUpdatesPause: NOT IMPLEMENTED")
-	return nil
-}
-
-func nodeUpdatesResume() error {
-	log.Println("nodeUpdatesResume: NOT IMPLEMENTED")
-	return nil
-}
-
-func nodeControllerConnect(controllerAddress string) error {
-	fmt.Println("nodeControllerConnect: NOT IMPLEMENTED")
-	return nil
-}
-
-func nodeControllerDisconnect() error {
-	fmt.Println("nodeControllerDisconnect: NOT IMPLEMENTED")
-	return nil
-}
-
-func nodeKill() error {
-	fmt.Println("nodeKill: NOT IMPLEMENTED")
-	return nil
-}
+const defaultNodeAddr = "127.0.0.1:5051"
+const defaultNodeRequestTimeout = uint64(time.Millisecond * 80)
 
 func cliVersion() error {
 	fmt.Println("version:", cli_version)
 	return nil
 }
 
-func fallbackEnv(argValue, envKey string) string {
+// Passed arguments override environment variables
+func fallbackStrEnv(argValue, envKey string) string {
 	if argValue == "" {
 		if envValue, envOk := os.LookupEnv(envKey); envOk && envValue != "" {
 			return envValue
@@ -85,13 +30,30 @@ func fallbackEnv(argValue, envKey string) string {
 	return argValue
 }
 
+func fallbackUint64Env(argValue uint64, envKey string) uint64 {
+	if argValue == 0 {
+		if envValue, envOk := os.LookupEnv(envKey); envOk && envValue != "" {
+			i, err := strconv.ParseUint(envValue, 10, 64)
+			if err == nil {
+				return i
+			}
+		}
+	}
+	return argValue
+}
+
+func handleArgs(cCtx *cli.Context) {
+	cliClient.NodeAddr = fallbackStrEnv(cCtx.String("addr"), "NODE_REMOTE_ADDR")
+	cliClient.NodeRequestTimeout = fallbackUint64Env(cCtx.Uint64("timeout"), "NODE_REMOTE_TIMEOUT")
+}
+
 func main() {
 	app := &cli.App{
 		Commands: []*cli.Command{
 			{
 				Name:    "version",
 				Aliases: []string{"v"},
-				Usage:   "display cli version",
+				Usage:   "display cli app version",
 				Action: func(cCtx *cli.Context) error {
 					return cliVersion()
 				},
@@ -103,8 +65,13 @@ func main() {
 				Flags: []cli.Flag{
 					&cli.StringFlag{
 						Name:  "addr",
-						Value: "127.0.0.1:5051",
+						Value: defaultNodeAddr,
 						Usage: "address of the node to connect to [NODE_REMOTE_ADDR]",
+					},
+					&cli.Uint64Flag{
+						Name:  "timeout",
+						Value: defaultNodeRequestTimeout,
+						Usage: "timeout for calls to node [NODE_REMOTE_TIMEOUT]",
 					},
 				},
 				Subcommands: []*cli.Command{
@@ -113,8 +80,8 @@ func main() {
 						Aliases: []string{"u"},
 						Usage:   "show the node app uuid",
 						Action: func(cCtx *cli.Context) error {
-							cliClient.NodeAddr = fallbackEnv(cCtx.String("addr"), "NODE_REMOTE_ADDR")
-							return nodeUuid()
+							handleArgs(cCtx)
+							return cliClient.ClientNodeUUID()
 						},
 					},
 					{
@@ -122,7 +89,8 @@ func main() {
 						Aliases: []string{"s"},
 						Usage:   "show the node status",
 						Action: func(cCtx *cli.Context) error {
-							return nodeStatus()
+							handleArgs(cCtx)
+							return cliClient.ClientNodeStatus()
 						},
 					},
 					{
@@ -135,8 +103,8 @@ func main() {
 								Aliases: []string{"v"},
 								Usage:   "show the node app version",
 								Action: func(cCtx *cli.Context) error {
-									nodeAddr := cCtx.String("addr")
-									return nodeVersion(nodeAddr)
+									handleArgs(cCtx)
+									return cliClient.ClientNodeAppVersion()
 								},
 							},
 							{
@@ -144,7 +112,8 @@ func main() {
 								Aliases: []string{"l"},
 								Usage:   "show the node app log",
 								Action: func(cCtx *cli.Context) error {
-									return nodeLog()
+									handleArgs(cCtx)
+									return cliClient.ClientNodeAppLog()
 								},
 							},
 							{
@@ -152,7 +121,8 @@ func main() {
 								Aliases: []string{"k"},
 								Usage:   "kill the node app",
 								Action: func(cCtx *cli.Context) error {
-									return nodeKill()
+									handleArgs(cCtx)
+									return cliClient.ClientNodeAppKill()
 								},
 							},
 						},
@@ -167,7 +137,8 @@ func main() {
 								Aliases: []string{"p"},
 								Usage:   "pause updating price updates to controller",
 								Action: func(cCtx *cli.Context) error {
-									return nodeUpdatesPause()
+									handleArgs(cCtx)
+									return cliClient.ClientNodeUpdatesPause()
 								},
 							},
 							{
@@ -175,7 +146,8 @@ func main() {
 								Aliases: []string{"r"},
 								Usage:   "resume updating price updates to controller",
 								Action: func(cCtx *cli.Context) error {
-									return nodeUpdatesResume()
+									handleArgs(cCtx)
+									return cliClient.ClientNodeUpdatesResume()
 								},
 							},
 						},
@@ -190,7 +162,8 @@ func main() {
 								Aliases: []string{"l"},
 								Usage:   "list all subscriptions (and known prices)",
 								Action: func(cCtx *cli.Context) error {
-									return nodeSubscriptions()
+									handleArgs(cCtx)
+									return cliClient.ClientNodeCurrencies()
 								},
 							},
 							{
@@ -198,7 +171,8 @@ func main() {
 								Aliases: []string{"s"},
 								Usage:   "sync the server subscriptions with our config file",
 								Action: func(cCtx *cli.Context) error {
-									return nodeSubscriptionsSync()
+									handleArgs(cCtx)
+									return cliClient.ClientNodeCurrenciesRefreshCache()
 								},
 							},
 							{
@@ -206,7 +180,8 @@ func main() {
 								Aliases: []string{"s"},
 								Usage:   "get the latest prices from server",
 								Action: func(cCtx *cli.Context) error {
-									return nodePriceRefresh()
+									handleArgs(cCtx)
+									return cliClient.ClientNodeCurrenciesRefreshCache()
 								},
 							},
 						},
@@ -221,7 +196,8 @@ func main() {
 								Aliases: []string{"c"},
 								Usage:   "ask node to connect to controller",
 								Action: func(cCtx *cli.Context) error {
-									return nodeControllerConnect("abc")
+									handleArgs(cCtx)
+									return cliClient.ClientNodeControllerConnect()
 								},
 							},
 							{
@@ -229,7 +205,8 @@ func main() {
 								Aliases: []string{"d"},
 								Usage:   "ask node to disconnect from controller",
 								Action: func(cCtx *cli.Context) error {
-									return nodeControllerDisconnect()
+									handleArgs(cCtx)
+									return cliClient.ClientNodeControllerDisconnect()
 								},
 							},
 						},

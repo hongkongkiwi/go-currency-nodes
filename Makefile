@@ -11,6 +11,10 @@ PROTO_OUTPUT_DIR := pb
 
 all: gen build
 
+.PHONE: check_deps
+check_deps: check_go check_docker check_protoc
+	@printf 'All dependencies checked successfully\n'
+
 .PHONY: check_protoc
 check_protoc:
 	@command -v protoc >/dev/null 2>&1 || (echo >&2 "ERROR: protoc is required."; exit 1)

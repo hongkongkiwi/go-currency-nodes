@@ -24,10 +24,10 @@ message NodeStatusReply {
       ERROR = 2;
     }
     ConnectionState connection_state = 1;
-    optional string connected_controller_server = 2;
-    optional string connection_error = 3;
-    optional google.protobuf.Timestamp connected_at = 4;
-    optional google.protobuf.Timestamp disconnected_at = 5;
+    string connected_controller_server = 2;
+    string connection_error = 3;
+    google.protobuf.Timestamp connected_at = 4;
+    google.protobuf.Timestamp disconnected_at = 5;
   }
   NodeConnectionState connection_state = 6;
   repeated CurrencyItem currency_items = 7;
@@ -50,7 +50,13 @@ message NodeCurrenciesForceUpdateReq {
   repeated string currency_pairs = 1; 
 }
 
+message NodeVersionReply {
+  string node_version = 1;
+}
+
 service NodeControlCommands {
+  // Get this nodes UUID and name
+  rpc NodeVersion (google.protobuf.Empty) returns (NodeVersionReply) {}
   // Get this nodes UUID and name
   rpc NodeUUID (google.protobuf.Empty) returns (NodeUUIDReply) {}
   // Get this nodes full status
