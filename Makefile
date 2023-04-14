@@ -1,10 +1,30 @@
-all: proto_gen build
+# Can set these as ENV variables
+PROTOC_BIN ?= protoc
+GO_BIN ?= go
+BUILD_DIR ?= build
+# Hardcoded for now
+GO_PKG := github.com/hongkongkiwi/go-currency-nodes
+PROTO_INPUT_DIR := proto
+PROTO_OUTPUT_DIR := pb
+
+all: gen build
+
+check_protoc:
+ifeq (, $(shell which $(PROTOC_BIN)))
+ 	$(error "No protoc binary found in PATH")
+endif
+
+check_go:
+ifeq (, $(shell which $(GO_BIN)))
+ 	$(error "No go binary found in PATH")
+endif
 
 gen: proto_gen
 
-proto_gen:
-	@mkdir -p pb
-	protoc --proto_path=./proto proto/*.proto --go_out=:pb --go-grpc_out=:pb
+proto_gen: check_protoc
+	@mkdir -p $(PROTO_OUTPUT_DIR)
+	@rm -Rf $(PROTO_OUTPUT_DIR)/*
+	protoc --proto_path=./$(PROTO_INPUT_DIR) $(PROTO_INPUT_DIR)/*.proto --go_out=:$(PROTO_OUTPUT_DIR) --go-grpc_out=:$(PROTO_OUTPUT_DIR)
 
 cli: build_cli
 
@@ -14,22 +34,19 @@ node: build_node
 
 build: build_cli build_controller build_node
 
-build_cli:
-	@mkdir -p build
-	go build -o build/cli github.com/hongkongkiwi/go-currency-nodes/cmd/cli
+build_cli: check_go
+	@mkdir -p $(BUILD_DIR)
+	go build -o $(BUILD_DIR)/cli $(GO_PKG)/cmd/cli
 
-build_controller:
-	@mkdir -p build
-	go build -o build/controller github.com/hongkongkiwi/go-currency-nodes/cmd/controller
+build_controller: check_go
+	@mkdir -p $(BUILD_DIR)
+	go build -o $(BUILD_DIR)/controller $(GO_PKG)/cmd/controller
 
-build_node:
-	@mkdir -p build
-	go build -o build/node github.com/hongkongkiwi/go-currency-nodes/cmd/node
-
-# server1:
-# 	go run cmd/server/main.go -port 50051
+build_node: check_go
+	@mkdir -p $(BUILD_DIR)
+	go build -o $(BUILD_DIR)/node $(GO_PKG)/cmd/node
 
 clean:
-	 rm -Rf pb/* build/*
+	 rm -Rf $(PROTO_OUTPUT_DIR)/* $(BUILD_DIR)/*
 
-.PHONY: all gen proto_gen build build_cli build_controller build_node clean cli node controller
+.PHONY: all check_protoc check_go gen proto_gen build build_cli build_controller build_node clean cli node controller
