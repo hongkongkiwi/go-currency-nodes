@@ -1,9 +1,10 @@
 package internal
 
 import (
+	"time"
+
 	"github.com/bay0/kvs"
 	"github.com/gofrs/uuid/v5"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 const (
@@ -12,8 +13,8 @@ const (
 )
 
 type CurrencyStoreItem struct {
-	Price   float32
-	ValidAt *timestamppb.Timestamp
+	Price   float64
+	ValidAt time.Time
 }
 
 func (p *CurrencyStoreItem) Clone() kvs.Value {
@@ -24,11 +25,11 @@ func (p *CurrencyStoreItem) Clone() kvs.Value {
 }
 
 type NodeConfigStore struct {
-	UUID           uuid.UUID
-	Name           string
-	ListenAddr     string
-	ControllerAddr string
-	CurrencyPairs  []string
+	UUID          uuid.UUID
+	Name          string
+	ListenAddr    string
+	CurrencyPairs []string
+	VerboseLog    bool
 }
 
 type ControllerConfigStore struct {

@@ -1,11 +1,14 @@
-package internal
+/**
+ * Cli Client contains the gRPC functions for controlling a Node
+ **/
 
-/** This file contains helper functions for the CLI Clients **/
+package internal
 
 import (
 	"context"
 	"fmt"
 	"log"
+	"runtime"
 	"time"
 
 	pb "github.com/hongkongkiwi/go-currency-nodes/pb" // imports as package "cli"
@@ -20,14 +23,19 @@ var clientConn *grpc.ClientConn
 var NodeAddr string
 var NodeRequestTimeout uint64
 
-func ClientConnect(nodeAddress string) (pb.NodeControlCommandsClient, context.Context, context.CancelFunc, error) {
+func funcName() string {
+	pc, _, _, _ := runtime.Caller(1)
+	return runtime.FuncForPC(pc).Name()
+}
+
+func ClientConnect(nodeAddress string) (pb.NodeCommandsClient, context.Context, context.CancelFunc, error) {
 	// Set up a connection to the server.
 	var err error
 	clientConn, err = grpc.Dial(nodeAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	c := pb.NewNodeControlCommandsClient(clientConn)
+	c := pb.NewNodeCommandsClient(clientConn)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(NodeRequestTimeout))
 	return c, ctx, cancel, err
 }
@@ -43,12 +51,12 @@ func ClientNodeUUID() error {
 		return connectErr
 	}
 	defer cancel()
-	log.Printf("gRPC: Request: NodeUUID")
+	log.Printf("gRPC: Request: %s", funcName())
 	r, err := c.NodeUUID(ctx, &emptypb.Empty{})
 	if err != nil {
 		return fmt.Errorf("could not call gRPC NodeUUID: %v", err)
 	}
-	log.Printf("gRPC: Reply: NodeUUID: %s", r.NodeUuid)
+	log.Printf("gRPC: Reply: %s: %s", funcName(), r.NodeUuid)
 	return nil
 }
 
@@ -59,12 +67,12 @@ func ClientNodeAppVersion() error {
 		return connectErr
 	}
 	defer cancel()
-	log.Printf("gRPC: Request: NodeVersion")
-	r, err := c.NodeVersion(ctx, &emptypb.Empty{})
+	log.Printf("gRPC: Request: %s", funcName())
+	r, err := c.NodeAppVersion(ctx, &emptypb.Empty{})
 	if err != nil {
 		return fmt.Errorf("could not call gRPC NodeVersion: %v", err)
 	}
-	log.Printf("gRPC: Reply: NodeVersion: %s", r.NodeVersion)
+	log.Printf("gRPC: Reply: %s: %s", funcName(), r.NodeVersion)
 	return nil
 }
 
@@ -75,12 +83,12 @@ func ClientNodeStatus() error {
 		return connectErr
 	}
 	defer cancel()
-	log.Printf("gRPC: Request: NodeStatus")
+	log.Printf("gRPC: Request: %s", funcName())
 	r, err := c.NodeStatus(ctx, &emptypb.Empty{})
 	if err != nil {
 		return fmt.Errorf("could not call gRPC NodeStatus: %v", err)
 	}
-	log.Printf("gRPC: Reply: NodeStatus: %s", r)
+	log.Printf("gRPC: Reply: %s: %s", funcName(), r)
 	return nil
 }
 
@@ -91,13 +99,13 @@ func ClientNodeUpdatesPause() error {
 		return connectErr
 	}
 	defer cancel()
-	log.Printf("gRPC: Request: NodeUpdatesPause")
+	log.Printf("gRPC: Request: %s", funcName())
 	// No interesting reply, ignore any data
-	_, err := c.NodeUpdatesPause(ctx, &emptypb.Empty{})
+	_, err := c.NodeCurrenciesPriceEventsPause(ctx, &emptypb.Empty{})
 	if err != nil {
 		return fmt.Errorf("could not call gRPC NodeUpdatesPause: %v", err)
 	}
-	log.Printf("gRPC: Reply: NodeUpdatesPause")
+	log.Printf("gRPC: Reply: %s", funcName())
 	return nil
 }
 
@@ -108,63 +116,30 @@ func ClientNodeUpdatesResume() error {
 		return connectErr
 	}
 	defer cancel()
-	log.Printf("gRPC: Request: NodeUpdatesResume")
+	log.Printf("gRPC: Request: %s", funcName())
 	// No interesting reply, ignore any data
-	_, err := c.NodeUpdatesResume(ctx, &emptypb.Empty{})
+	_, err := c.NodeCurrenciesPriceEventsResume(ctx, &emptypb.Empty{})
 	if err != nil {
 		return fmt.Errorf("could not call gRPC NodeUpdatesResume: %v", err)
 	}
-	log.Printf("gRPC: Reply: NodeUpdatesResume")
+	log.Printf("gRPC: Reply: %s", funcName())
 	return nil
 }
 
-// rpc NodeCurrenciesForceUpdate (NodeCurrenciesForceUpdateReq) returns (google.protobuf.Empty) {}
-func ClientNodeCurrenciesForceUpdate(currencyPairs []string) error {
-	c, ctx, cancel, connectErr := ClientConnect(NodeAddr)
-	if connectErr != nil {
-		return connectErr
-	}
-	defer cancel()
-	log.Printf("gRPC: Request: NodeCurrenciesForceUpdate")
-	// No interesting reply, ignore any data
-	_, err := c.NodeCurrenciesForceUpdate(ctx, &pb.NodeCurrenciesForceUpdateReq{CurrencyPairs: currencyPairs})
-	if err != nil {
-		return fmt.Errorf("could not call gRPC NodeCurrenciesForceUpdate: %v", err)
-	}
-	log.Printf("gRPC: Reply: NodeCurrenciesForceUpdate")
-	return nil
-}
-
-// rpc NodeCurrencies (google.protobuf.Empty) returns (NodeSubscriptionsReply) {}
+// Get details of all currencies this Node knows about
+// rpc NodeCurrencies (google.protobuf.Empty) returns (NodeCurrenciesReply) {}
 func ClientNodeCurrencies() error {
 	c, ctx, cancel, connectErr := ClientConnect(NodeAddr)
 	if connectErr != nil {
 		return connectErr
 	}
 	defer cancel()
-	log.Printf("gRPC: Request: NodeCurrencies")
+	log.Printf("gRPC: Request: %s", funcName())
 	r, err := c.NodeCurrencies(ctx, &emptypb.Empty{})
 	if err != nil {
 		return fmt.Errorf("could not call gRPC NodeCurrencies: %v", err)
 	}
-	log.Printf("gRPC: Reply: NodeCurrencies %s", r)
-	return nil
-}
-
-// rpc NodeCurrenciesRefreshCache (google.protobuf.Empty) returns (google.protobuf.Empty) {}
-func ClientNodeCurrenciesRefreshCache() error {
-	c, ctx, cancel, connectErr := ClientConnect(NodeAddr)
-	if connectErr != nil {
-		return connectErr
-	}
-	defer cancel()
-	log.Printf("gRPC: Request: NodeCurrenciesRefreshCache")
-	// No interesting reply, ignore any data
-	_, err := c.NodeCurrenciesRefreshCache(ctx, &emptypb.Empty{})
-	if err != nil {
-		return fmt.Errorf("could not call gRPC NodeCurrenciesRefreshCache: %v", err)
-	}
-	log.Printf("gRPC: Reply: NodeCurrenciesRefreshCache")
+	log.Printf("gRPC: Reply: %s: %s", funcName(), r)
 	return nil
 }
 
@@ -175,13 +150,13 @@ func ClientNodeControllerConnect() error {
 		return connectErr
 	}
 	defer cancel()
-	log.Printf("gRPC: Request: NodeControllerConnect")
+	log.Printf("gRPC: Request: %s", funcName())
 	// No interesting reply, ignore any data
 	_, err := c.NodeControllerConnect(ctx, &emptypb.Empty{})
 	if err != nil {
 		return fmt.Errorf("could not call gRPC NodeControllerConnect: %v", err)
 	}
-	log.Printf("gRPC: Reply: NodeControllerConnect")
+	log.Printf("gRPC: Reply: %s", funcName())
 	return nil
 }
 
@@ -192,29 +167,13 @@ func ClientNodeControllerDisconnect() error {
 		return connectErr
 	}
 	defer cancel()
-	log.Printf("gRPC: Request: NodeControllerDisconnect")
+	log.Printf("gRPC: Request: %s", funcName())
 	// No interesting reply, ignore any data
 	_, err := c.NodeControllerDisconnect(ctx, &emptypb.Empty{})
 	if err != nil {
 		return fmt.Errorf("could not call gRPC NodeControllerDisconnect: %v", err)
 	}
-	log.Printf("gRPC: Reply: NodeControllerDisconnect")
-	return nil
-}
-
-// rpc NodeAppLog (google.protobuf.Empty) returns (NodeAppLogReply) {}
-func ClientNodeAppLog() error {
-	c, ctx, cancel, connectErr := ClientConnect(NodeAddr)
-	if connectErr != nil {
-		return connectErr
-	}
-	defer cancel()
-	log.Printf("gRPC: Request: NodeAppLog")
-	r, err := c.NodeAppLog(ctx, &emptypb.Empty{})
-	if err != nil {
-		return fmt.Errorf("could not call gRPC NodeAppLog: %v", err)
-	}
-	log.Printf("gRPC: Reply: NodeAppLog\n%s", r.Log)
+	log.Printf("gRPC: Reply: %s", funcName())
 	return nil
 }
 
@@ -225,13 +184,13 @@ func ClientNodeAppKill() error {
 		return connectErr
 	}
 	defer cancel()
-	log.Printf("gRPC: Request: NodeAppKill")
+	log.Printf("gRPC: Request: %s", funcName())
 	// No interesting reply, ignore any data
 	_, err := c.NodeAppKill(ctx, &emptypb.Empty{})
 	// NOTE: nmeed to handle the fact we never recieve a reply here after asking app to quit
 	if err != nil {
 		return fmt.Errorf("could not call gRPC NodeAppKill: %v", err)
 	}
-	log.Printf("gRPC: Reply: NodeAppKill")
+	log.Printf("gRPC: Reply: %s", funcName())
 	return nil
 }

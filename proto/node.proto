@@ -33,65 +33,47 @@ message NodeStatusReply {
   repeated CurrencyItem currency_items = 7;
 }
 
-message NodeUUIDReply {
-  string node_uuid = 1;
-  string node_name = 2;
-}
-
-message NodeSubscriptionsReply {
-  repeated string currency_pairs = 1; 
-}
-
-message NodeAppLogReply {
-  string log = 1;
-}
-
-message NodeCurrenciesForceUpdateReq {
-  repeated string currency_pairs = 1; 
-}
-
-message NodeVersionReply {
-  string node_version = 1;
-}
-
-service NodeControlCommands {
+service NodeCommands {
   // Get this nodes UUID and name
-  rpc NodeVersion (google.protobuf.Empty) returns (NodeVersionReply) {}
+  rpc NodeAppVersion (google.protobuf.Empty) returns (NodeAppVersionReply) {}
   // Get this nodes UUID and name
   rpc NodeUUID (google.protobuf.Empty) returns (NodeUUIDReply) {}
   // Get this nodes full status
   rpc NodeStatus (google.protobuf.Empty) returns (NodeStatusReply) {}
   // Pause updates of currencies to controller
-  rpc NodeUpdatesPause (google.protobuf.Empty) returns (google.protobuf.Empty) {}
+  rpc NodeCurrenciesPriceEventsPause (google.protobuf.Empty) returns (google.protobuf.Empty) {}
   // Resume updates of currencies to controller
-  rpc NodeUpdatesResume (google.protobuf.Empty) returns (google.protobuf.Empty) {}
-  // Forces an update of the local currency value to the server
-  rpc NodeCurrenciesForceUpdate (NodeCurrenciesForceUpdateReq) returns (google.protobuf.Empty) {}
-  // Get a list of all currencies defined in our config and their latest knwn prices
-  rpc NodeCurrencies (google.protobuf.Empty) returns (NodeSubscriptionsReply) {}
-  // Force a refresh of our local currency values
-  rpc NodeCurrenciesRefreshCache (google.protobuf.Empty) returns (google.protobuf.Empty) {}
-  // Ask the node to connect manually
-  rpc NodeControllerConnect(google.protobuf.Empty) returns (google.protobuf.Empty) {}
-  // Ask the node to disconnect manually (will not reconnect until commanded or restarted)
-  rpc NodeControllerDisconnect(google.protobuf.Empty) returns (google.protobuf.Empty) {}
-  // Grab our app log
-  rpc NodeAppLog (google.protobuf.Empty) returns (NodeAppLogReply) {}
+  rpc NodeCurrenciesPriceEventsResume (google.protobuf.Empty) returns (google.protobuf.Empty) {}
+  // Get details of all currencies this Node knows about
+  rpc NodeCurrencies (google.protobuf.Empty) returns (NodeCurrenciesReply) {}
+  // Ask our node to request the latest prices from controller
+  rpc NodeCurrenciesRefreshPrices (google.protobuf.Empty) returns (google.protobuf.Empty) {}
   // Kill the app
   rpc NodeAppKill (google.protobuf.Empty) returns (google.protobuf.Empty) {}
 }
 
-message CurrencyPriceEventReq {
-  repeated CurrencyItem currency_items = 1;
+// rpc NodeUUID
+message NodeUUIDReply {
+  string node_uuid = 1;
+  string node_name = 2;
 }
 
-message CurrencySubscriptionsEventReq {
-  repeated CurrencyItem currency_items = 1;
+// rpc NodeVersion
+message NodeAppVersionReply {
+  string node_version = 1;
 }
 
-service NodePriceEvents {
+// rpc NodeCurrencies
+message NodeCurrenciesReply {
+  repeated string currency_pairs = 1; 
+}
+
+service NodeEvents {
   // Controller calls this on node when a new price comes in
-  rpc CurrencyPriceEvent (CurrencyPriceEventReq) returns (google.protobuf.Empty) {}
-  // Controller calls this when subscriptions change
-  rpc CurrencySubscriptionsEvent (CurrencySubscriptionsEventReq) returns (google.protobuf.Empty) {}
+  rpc CurrencyPriceUpdatedEvent (CurrencyPriceUpdateEventReq) returns (google.protobuf.Empty) {}
+}
+
+// rpc CurrencyPriceUpdatedEvent
+message CurrencyPriceUpdateEventReq {
+  repeated CurrencyItem currency_items = 1;
 }

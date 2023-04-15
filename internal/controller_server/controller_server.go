@@ -1,9 +1,15 @@
 package internal
 
+/**
+ * Controller Server Contains the gRPC server for serving functions that the Nodes call
+ */
+
 import (
 	"context"
 	"log"
 	"net"
+	"runtime"
+	"strings"
 	"sync"
 
 	"github.com/bay0/kvs"
@@ -17,7 +23,13 @@ import (
 const ControllerVersion = "0.0.3"
 
 type grpcControllerServer struct {
-	pb.UnimplementedControllerPriceCommandsServer
+	pb.ControllerCommandsServer
+}
+
+func funcName() string {
+	pc, _, _, _ := runtime.Caller(1)
+	names := strings.Split(runtime.FuncForPC(pc).Name(), ".")
+	return names[len(names)-1]
 }
 
 // rpc ControllerVersion (google.protobuf.Empty) returns (ControllerVersionReply) {}
@@ -26,18 +38,18 @@ func (s *grpcControllerServer) ControllerVersion(ctx context.Context, _ *emptypb
 }
 
 // rpc CurrencyPrice (CurrencyPriceReq) returns (CurrencyGetPriceReply) {}
-func (s *grpcControllerServer) CurrencyPrice(ctx context.Context, in *pb.CurrencyPriceReq) (*pb.CurrencyGetPriceReply, error) {
-	return &pb.CurrencyGetPriceReply{}, nil
+func (s *grpcControllerServer) CurrencyPrice(ctx context.Context, in *pb.CurrencyPriceReq) (*pb.CurrencyPriceReply, error) {
+	return &pb.CurrencyPriceReply{}, nil
 }
 
-// rpc CurrencyUpdatePrice (CurrencyUpdatePriceReq) returns (CurrencyUpdatePriceReply) {}
-func (s *grpcControllerServer) CurrencyUpdatePrice(ctx context.Context, in *pb.CurrencyUpdatePriceReq) (*pb.CurrencyUpdatePriceReply, error) {
-	return &pb.CurrencyUpdatePriceReply{}, nil
+// rpc CurrencyPriceUpdate (CurrencyPriceUpdateReq) returns (CurrencyPriceUpdateReply) {}
+func (s *grpcControllerServer) CurrencyPriceUpdate(ctx context.Context, in *pb.CurrencyPriceUpdateReq) (*pb.CurrencyPriceUpdateReply, error) {
+	return &pb.CurrencyPriceUpdateReply{}, nil
 }
 
-// rpc CurrencySubscribe (CurrencySubscribeReq) returns (CurrencySubscribeReply) {}
-func (s *grpcControllerServer) CurrencySubscribe(ctx context.Context, in *pb.CurrencySubscribeReq) (*pb.CurrencySubscribeReply, error) {
-	return &pb.CurrencySubscribeReply{}, nil
+// rpc CurrencyPriceSubscribe (CurrencyPriceSubscribeReq) returns (CurrencyPriceSubscribeReply) {}
+func (s *grpcControllerServer) CurrencyPriceSubscribe(ctx context.Context, in *pb.CurrencyPriceSubscribeReq) (*pb.CurrencyPriceSubscribeReply, error) {
+	return &pb.CurrencyPriceSubscribeReply{}, nil
 }
 
 func Start(wg *sync.WaitGroup, listenAddr string) {
@@ -46,16 +58,16 @@ func Start(wg *sync.WaitGroup, listenAddr string) {
 	helpers.ControllerPriceStore = kvs.NewKeyValueStore(1)
 	lis, err := net.Listen("tcp", listenAddr)
 	if err != nil {
-		log.Printf("failed to listen controller server: %v", err)
+		log.Printf("Failed to listen controller server: %v", err)
 		return
 	}
 	s := grpc.NewServer()
-	pb.RegisterControllerPriceCommandsServer(s, &grpcControllerServer{})
-	log.Printf("controller server listening at %v", lis.Addr())
+	pb.RegisterControllerCommandsServer(s, &grpcControllerServer{})
+	log.Printf("Controller server listening at %v", lis.Addr())
 	// Register reflection to help with debugging
 	reflection.Register(s)
 	if err := s.Serve(lis); err != nil {
-		log.Printf("failed to serve controller server: %v", err)
+		log.Printf("Failed to serve controller server: %v", err)
 		return
 	}
 }

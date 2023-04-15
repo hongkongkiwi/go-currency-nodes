@@ -76,17 +76,17 @@ build_docker_controller: check_docker
 build: build_cli build_controller build_node
 
 .PHONY: build_cli # Build cli app
-build_cli: check_go
+build_cli: check_go proto_gen
 	@mkdir -p $(BUILD_DIR)
 	go build -o $(BUILD_DIR)/cli $(GO_PKG)/cmd/cli
 
 .PHONY: build_controller # Build controller app
-build_controller: check_go
+build_controller: check_go proto_gen
 	@mkdir -p $(BUILD_DIR)
 	go build -o $(BUILD_DIR)/controller $(GO_PKG)/cmd/controller
 
 .PHONY: build_node # Build node app
-build_node: check_go
+build_node: check_go proto_gen
 	@mkdir -p $(BUILD_DIR)
 	go build -o $(BUILD_DIR)/node $(GO_PKG)/cmd/node
 

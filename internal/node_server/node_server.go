@@ -1,42 +1,64 @@
+/**
+ * Node Server Contains the gRPC server for functions that the Controller calls on the Node
+ **/
+
 package internal
 
 import (
 	"context"
 	"log"
 	"net"
+	"runtime"
+	"strings"
 	"sync"
 
 	"github.com/bay0/kvs"
 	helpers "github.com/hongkongkiwi/go-currency-nodes/internal/helpers"
+	nodeClient "github.com/hongkongkiwi/go-currency-nodes/internal/node_client"
 	pb "github.com/hongkongkiwi/go-currency-nodes/pb"
 	"github.com/tebeka/atexit"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 const NodeVersion = "0.0.2"
 
-type grpcControlServer struct {
-	pb.UnimplementedNodeControlCommandsServer
+func funcName() string {
+	pc, _, _, _ := runtime.Caller(1)
+	names := strings.Split(runtime.FuncForPC(pc).Name(), ".")
+	return names[len(names)-1]
 }
 
-type grpcPriceEventServer struct {
-	pb.UnimplementedNodePriceEventsServer
+// Events called by the control cli
+type grpcNodeCommandsServer struct {
+	pb.NodeCommandsServer
 }
 
-func (s *grpcControlServer) NodeUUID(ctx context.Context, _ *emptypb.Empty) (*pb.NodeUUIDReply, error) {
-	log.Printf("gRPC: NodeUUID")
+// Events called by the controller
+type grpcNodeEventsServer struct {
+	pb.NodeEventsServer
+}
+
+// Get uuid of this node
+// rpc NodeUUID (google.protobuf.Empty) returns (NodeUUIDReply) {}
+func (s *grpcNodeCommandsServer) NodeUUID(ctx context.Context, _ *emptypb.Empty) (*pb.NodeUUIDReply, error) {
+	log.Printf("gRPC: %s", funcName())
 	return &pb.NodeUUIDReply{NodeUuid: helpers.NodeCfg.UUID.String()}, nil
 }
 
-func (s *grpcControlServer) NodeVersion(ctx context.Context, _ *emptypb.Empty) (*pb.NodeVersionReply, error) {
-	log.Printf("gRPC: NodeVersion")
-	return &pb.NodeVersionReply{NodeVersion: NodeVersion}, nil
+// Get app version from this node
+// rpc NodeAppVersion (google.protobuf.Empty) returns (NodeVersionReply) {}
+func (s *grpcNodeCommandsServer) NodeAppVersion(ctx context.Context, _ *emptypb.Empty) (*pb.NodeAppVersionReply, error) {
+	log.Printf("gRPC: %s", funcName())
+	return &pb.NodeAppVersionReply{NodeVersion: NodeVersion}, nil
 }
 
-func (s *grpcControlServer) NodeStatus(ctx context.Context, _ *emptypb.Empty) (*pb.NodeStatusReply, error) {
-	log.Printf("gRPC: NodeStatus")
+// Get this nodes status
+// rpc NodeStatus (google.protobuf.Empty) returns (NodeStatusReply) {}
+func (s *grpcNodeCommandsServer) NodeStatus(ctx context.Context, _ *emptypb.Empty) (*pb.NodeStatusReply, error) {
+	log.Printf("gRPC: %s", funcName())
 	currencyPairs := helpers.NodeCfg.CurrencyPairs
 	currencyItems := make([]*pb.CurrencyItem, len(currencyPairs))
 	for i, key := range currencyPairs {
@@ -46,7 +68,7 @@ func (s *grpcControlServer) NodeStatus(ctx context.Context, _ *emptypb.Empty) (*
 			currencyItems[i] = &pb.CurrencyItem{
 				CurrencyPair: key,
 				Price:        priceStore.Price,
-				PriceValidAt: priceStore.ValidAt,
+				PriceValidAt: timestamppb.New(priceStore.ValidAt),
 			}
 		} else {
 			currencyItems[i] = &pb.CurrencyItem{
@@ -60,108 +82,70 @@ func (s *grpcControlServer) NodeStatus(ctx context.Context, _ *emptypb.Empty) (*
 		NodeName:               helpers.NodeCfg.Name,
 		NodeVersion:            NodeVersion,
 		NodeUpdatesStreamState: pb.NodeStatusReply_NodeStreamState(helpers.NodePriceUpdatesState),
-		ControllerServer:       helpers.NodeCfg.ControllerAddr,
+		ControllerServer:       nodeClient.ControllerAddr,
 		CurrencyItems:          currencyItems,
 		// ConnectionState: ,
 		// CurrencyItems: ,
 	}, nil
 }
 
-// Pause updates of currencies to controller
-func (s *grpcControlServer) NodeUpdatesPause(ctx context.Context, _ *emptypb.Empty) (*emptypb.Empty, error) {
-	log.Printf("gRPC: NodeUpdatesPause")
+// Stops this node from sending currency price updates (updates are still received and stored locally)
+// rpc NodeCurrenciesPriceEventsPause (google.protobuf.Empty) returns (google.protobuf.Empty) {}
+func (s *grpcNodeCommandsServer) NodeCurrenciesPriceEventsPause(ctx context.Context, _ *emptypb.Empty) (*emptypb.Empty, error) {
+	log.Printf("gRPC: %s", funcName())
 	helpers.NodePriceUpdatesState = helpers.PriceUpdatesPause
 	return &emptypb.Empty{}, nil
 }
 
-// Resume updates of currencies to controller
-func (s *grpcControlServer) NodeUpdatesResume(ctx context.Context, _ *emptypb.Empty) (*emptypb.Empty, error) {
-	log.Printf("gRPC: NodeUpdatesResume")
+// Resume sending currency price updates to controller
+// rpc NodeCurrenciesPriceEventsResume (google.protobuf.Empty) returns (google.protobuf.Empty) {}
+func (s *grpcNodeCommandsServer) NodeCurrenciesPriceEventsResume(ctx context.Context, _ *emptypb.Empty) (*emptypb.Empty, error) {
+	log.Printf("gRPC: %s", funcName())
 	helpers.NodePriceUpdatesState = helpers.PriceUpdatesReady
 	return &emptypb.Empty{}, nil
 }
 
-// Forces an update of the local currency value to the server
-func (s *grpcControlServer) NodeCurrenciesForceUpdate(ctx context.Context, in *pb.NodeCurrenciesForceUpdateReq) (*emptypb.Empty, error) {
-	log.Printf("gRPC: NodeCurrenciesForceUpdate %s", in)
-	// Check if connected
-
-	// Update local currency
-
-	// nodeClient.ControllerCurrenciesForceUpdate()
-	return &emptypb.Empty{}, nil
-}
-
-// Get a list of all currencies defined in our config and their latest knwn prices
-func (s *grpcControlServer) NodeCurrencies(ctx context.Context, _ *emptypb.Empty) (*pb.NodeSubscriptionsReply, error) {
-	log.Printf("gRPC: NodeCurrencies")
+// Request a list of all subscribed currencies
+// rpc NodeCurrencies (google.protobuf.Empty) returns (NodeSubscriptionsReply) {}
+func (s *grpcNodeCommandsServer) NodeCurrencies(ctx context.Context, _ *emptypb.Empty) (*pb.NodeCurrenciesReply, error) {
+	log.Printf("gRPC: %s", funcName())
 	currency_pairs, _ := helpers.NodePriceStore.Keys()
-	return &pb.NodeSubscriptionsReply{CurrencyPairs: currency_pairs}, nil
+	return &pb.NodeCurrenciesReply{CurrencyPairs: currency_pairs}, nil
 }
 
-// Force a refresh of our local currency values
-func (s *grpcControlServer) NodeCurrenciesRefreshCache(ctx context.Context, _ *emptypb.Empty) (*emptypb.Empty, error) {
-	log.Printf("gRPC: NodeCurrenciesRefreshCache")
+// Request node to manually refresh prices from controller
+// rpc NodeCurrenciesRefreshPrices (google.protobuf.Empty) returns (google.protobuf.Empty) {}
+func (s *grpcNodeCommandsServer) NodeCurrenciesRefreshPrices(ctx context.Context, _ *emptypb.Empty) (*emptypb.Empty, error) {
+	log.Printf("gRPC: %s", funcName())
 	return &emptypb.Empty{}, nil
 }
 
-// Ask the node to connect manually
-func (s *grpcControlServer) NodeControllerConnect(ctx context.Context, _ *emptypb.Empty) (*emptypb.Empty, error) {
-	log.Printf("gRPC: NodeControllerConnect")
-	// Check if disconnect, then connect
-	// nodeClient.Connect()
-	return &emptypb.Empty{}, nil
-}
-
-// Ask the node to disconnect manually (will not reconnect until commanded or restarted)
-func (s *grpcControlServer) NodeControllerDisconnect(ctx context.Context, _ *emptypb.Empty) (*emptypb.Empty, error) {
-	log.Printf("gRPC: NodeControllerDisconnect")
-	// Check if connected, then disconnect
-	// nodeClient.Disconnect()
-	return &emptypb.Empty{}, nil
-}
-
-// Grab our app log
-func (s *grpcControlServer) NodeAppLog(ctx context.Context, _ *emptypb.Empty) (*pb.NodeAppLogReply, error) {
-	log.Printf("gRPC: NodeAppLog")
-	return nil, nil
-}
-
-// Kill the app
-func (s *grpcControlServer) NodeAppKill(ctx context.Context, _ *emptypb.Empty) (*emptypb.Empty, error) {
-	log.Printf("gRPC: NodeAppKill")
+// Kill the Node
+// rpc NodeAppKill (google.protobuf.Empty) returns (google.protobuf.Empty) {}
+func (s *grpcNodeCommandsServer) NodeAppKill(ctx context.Context, _ *emptypb.Empty) (*emptypb.Empty, error) {
+	log.Printf("gRPC: %s", funcName())
 	atexit.Exit(0)
 	// Sadly we never get here since we quit
 	return &emptypb.Empty{}, nil
 }
 
-// Controller calls this on node when a new price comes in
-func (s *grpcPriceEventServer) CurrencyPriceEvent(ctx context.Context, in *pb.CurrencyPriceEventReq) (*emptypb.Empty, error) {
+// Called when a new price comes in from controller - all prices are cached locally
+// rpc CurrencyPriceUpdatedEvent (CurrencyPriceUpdateEventReq) returns (google.protobuf.Empty) {}
+func (s *grpcNodeEventsServer) CurrencyPriceUpdatedEvent(ctx context.Context, in *pb.CurrencyPriceUpdateEventReq) (*emptypb.Empty, error) {
+	log.Printf("gRPC: %s", funcName())
 	// Store the updated prices into our local store
 	for _, c := range in.CurrencyItems {
 		log.Printf("gRPC: CurrencyPriceEvent: %s", c)
 		helpers.NodePriceStore.Set(c.CurrencyPair, &helpers.CurrencyStoreItem{
 			Price:   c.Price,
-			ValidAt: c.PriceValidAt,
+			ValidAt: c.PriceValidAt.AsTime(),
 		})
 	}
 	return &emptypb.Empty{}, nil
 }
 
-// Controller calls this when subscriptions change
-func (s *grpcPriceEventServer) CurrencySubscriptionsEvent(ctx context.Context, in *pb.CurrencySubscriptionsEventReq) (*emptypb.Empty, error) {
-	// Store the updated prices into our local store (sent as part of the subscription update)
-	for _, c := range in.CurrencyItems {
-		log.Printf("gRPC: CurrencySubscriptionsEvent: %s", c)
-		helpers.NodePriceStore.Set(c.CurrencyPair, &helpers.CurrencyStoreItem{
-			Price:   c.Price,
-			ValidAt: c.PriceValidAt,
-		})
-	}
-	return &emptypb.Empty{}, nil
-}
-
-func Start(wg *sync.WaitGroup, listenAddr string) {
+// Start our gRPC server
+func StartServer(wg *sync.WaitGroup, listenAddr string) {
 	defer wg.Done()
 	// Create new store
 	helpers.NodePriceStore = kvs.NewKeyValueStore(1)
@@ -171,8 +155,8 @@ func Start(wg *sync.WaitGroup, listenAddr string) {
 		return
 	}
 	s := grpc.NewServer()
-	pb.RegisterNodeControlCommandsServer(s, &grpcControlServer{})
-	pb.RegisterNodePriceEventsServer(s, &grpcPriceEventServer{})
+	pb.RegisterNodeCommandsServer(s, &grpcNodeCommandsServer{})
+	pb.RegisterNodeEventsServer(s, &grpcNodeEventsServer{})
 	log.Printf("server listening at %v", lis.Addr())
 	// Register reflection to help with debugging
 	reflection.Register(s)
@@ -182,6 +166,6 @@ func Start(wg *sync.WaitGroup, listenAddr string) {
 	}
 }
 
-func Stop() {
+func StopServer() {
 	log.Println("server closed")
 }
