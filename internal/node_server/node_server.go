@@ -62,7 +62,7 @@ func (s *grpcNodeCommandsServer) NodeStatus(ctx context.Context, _ *emptypb.Empt
 	currencyPairs := helpers.NodeCfg.CurrencyPairs
 	currencyItems := make([]*pb.CurrencyItem, len(currencyPairs))
 	for i, key := range currencyPairs {
-		val, _ := helpers.NodePriceStore.Get(key)
+		val, _ := nodeClient.NodePriceStore.Get(key)
 		if val != nil {
 			priceStore, _ := val.(*helpers.CurrencyStoreItem)
 			currencyItems[i] = &pb.CurrencyItem{
@@ -81,7 +81,7 @@ func (s *grpcNodeCommandsServer) NodeStatus(ctx context.Context, _ *emptypb.Empt
 		NodeUuid:               helpers.NodeCfg.UUID.String(),
 		NodeName:               helpers.NodeCfg.Name,
 		NodeVersion:            NodeVersion,
-		NodeUpdatesStreamState: pb.NodeStatusReply_NodeStreamState(helpers.NodePriceUpdatesState),
+		NodeUpdatesStreamState: pb.NodeStatusReply_NodeStreamState(nodeClient.NodePriceUpdatesState),
 		ControllerServer:       nodeClient.ControllerAddr,
 		CurrencyItems:          currencyItems,
 		// ConnectionState: ,
@@ -93,7 +93,7 @@ func (s *grpcNodeCommandsServer) NodeStatus(ctx context.Context, _ *emptypb.Empt
 // rpc NodeCurrenciesPriceEventsPause (google.protobuf.Empty) returns (google.protobuf.Empty) {}
 func (s *grpcNodeCommandsServer) NodeCurrenciesPriceEventsPause(ctx context.Context, _ *emptypb.Empty) (*emptypb.Empty, error) {
 	log.Printf("gRPC: %s", funcName())
-	helpers.NodePriceUpdatesState = helpers.PriceUpdatesPause
+	nodeClient.NodePriceUpdatesState = nodeClient.PriceUpdatesPause
 	return &emptypb.Empty{}, nil
 }
 
@@ -101,7 +101,7 @@ func (s *grpcNodeCommandsServer) NodeCurrenciesPriceEventsPause(ctx context.Cont
 // rpc NodeCurrenciesPriceEventsResume (google.protobuf.Empty) returns (google.protobuf.Empty) {}
 func (s *grpcNodeCommandsServer) NodeCurrenciesPriceEventsResume(ctx context.Context, _ *emptypb.Empty) (*emptypb.Empty, error) {
 	log.Printf("gRPC: %s", funcName())
-	helpers.NodePriceUpdatesState = helpers.PriceUpdatesReady
+	nodeClient.NodePriceUpdatesState = nodeClient.PriceUpdatesReady
 	return &emptypb.Empty{}, nil
 }
 
@@ -109,7 +109,7 @@ func (s *grpcNodeCommandsServer) NodeCurrenciesPriceEventsResume(ctx context.Con
 // rpc NodeCurrencies (google.protobuf.Empty) returns (NodeSubscriptionsReply) {}
 func (s *grpcNodeCommandsServer) NodeCurrencies(ctx context.Context, _ *emptypb.Empty) (*pb.NodeCurrenciesReply, error) {
 	log.Printf("gRPC: %s", funcName())
-	currency_pairs, _ := helpers.NodePriceStore.Keys()
+	currency_pairs, _ := nodeClient.NodePriceStore.Keys()
 	return &pb.NodeCurrenciesReply{CurrencyPairs: currency_pairs}, nil
 }
 
@@ -136,7 +136,7 @@ func (s *grpcNodeEventsServer) CurrencyPriceUpdatedEvent(ctx context.Context, in
 	// Store the updated prices into our local store
 	for _, c := range in.CurrencyItems {
 		log.Printf("gRPC: CurrencyPriceEvent: %s", c)
-		helpers.NodePriceStore.Set(c.CurrencyPair, &helpers.CurrencyStoreItem{
+		nodeClient.NodePriceStore.Set(c.CurrencyPair, &helpers.CurrencyStoreItem{
 			Price:   c.Price,
 			ValidAt: c.PriceValidAt.AsTime(),
 		})
@@ -148,7 +148,7 @@ func (s *grpcNodeEventsServer) CurrencyPriceUpdatedEvent(ctx context.Context, in
 func StartServer(wg *sync.WaitGroup, listenAddr string) {
 	defer wg.Done()
 	// Create new store
-	helpers.NodePriceStore = kvs.NewKeyValueStore(1)
+	nodeClient.NodePriceStore = kvs.NewKeyValueStore(1)
 	lis, err := net.Listen("tcp", listenAddr)
 	if err != nil {
 		log.Printf("failed to listen: %v", err)
@@ -158,7 +158,7 @@ func StartServer(wg *sync.WaitGroup, listenAddr string) {
 	pb.RegisterNodeCommandsServer(s, &grpcNodeCommandsServer{})
 	pb.RegisterNodeEventsServer(s, &grpcNodeEventsServer{})
 	log.Printf("server listening at %v", lis.Addr())
-	// Register reflection to help with debugging
+	// Register reflection to help with debugging via CLI
 	reflection.Register(s)
 	if err := s.Serve(lis); err != nil {
 		log.Printf("failed to serve: %v", err)

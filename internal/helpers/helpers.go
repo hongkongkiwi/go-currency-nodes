@@ -7,16 +7,12 @@ import (
 	"github.com/gofrs/uuid/v5"
 )
 
-const (
-	PriceUpdatesReady int = iota
-	PriceUpdatesPause
-)
-
 type CurrencyStoreItem struct {
 	Price   float64
 	ValidAt time.Time
 }
 
+// This is implemented for the KV store
 func (p *CurrencyStoreItem) Clone() kvs.Value {
 	return &CurrencyStoreItem{
 		Price:   p.Price,
@@ -37,9 +33,4 @@ type ControllerConfigStore struct {
 }
 
 var NodeCfg NodeConfigStore
-var NodePriceStore *kvs.KeyValueStore
-var NodePriceUpdatesState int = PriceUpdatesReady
-
 var ControllerCfg ControllerConfigStore
-var ControllerSubscriptionsStore *kvs.KeyValueStore
-var ControllerPriceStore *kvs.KeyValueStore

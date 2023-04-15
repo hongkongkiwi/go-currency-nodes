@@ -38,7 +38,8 @@ message CurrencyPriceUpdateReply {
 }
 
 message CurrencyPriceSubscribeReq {
-  repeated string currency_pairs = 1;
+  string nodeUuid = 1;
+  repeated string currency_pairs = 2;
 }
 
 message CurrencyPriceSubscribeReply {
