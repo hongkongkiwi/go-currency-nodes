@@ -2,13 +2,15 @@ syntax = "proto3";
 package protobuf;
 
 import "google/protobuf/empty.proto";
-// import "google/protobuf/timestamp.proto";
+import "google/protobuf/timestamp.proto";
 import "currency_helpers.proto";
 option go_package = "./";
 
 service ControllerCommands {
   // Manually get the price of one or more currencies
-  rpc ControllerVersion (google.protobuf.Empty) returns (ControllerVersionReply) {}
+  rpc ControllerVersion (ControllerVersionReq) returns (ControllerVersionReply) {}
+  // Sent by node upon connection, then regularly
+  rpc NodeKeepAlive (NodeKeepAliveReq) returns (google.protobuf.Empty) {}
   // Manually get the price of one or more currencies
   rpc CurrencyPrice (CurrencyPriceReq) returns (CurrencyPriceReply) {}
   // Update the price of one or more currenices(normally sent 1 at a time but can be batched)
@@ -17,12 +19,21 @@ service ControllerCommands {
   rpc CurrencyPriceSubscribe (CurrencyPriceSubscribeReq) returns (CurrencyPriceSubscribeReply) {}
 }
 
+message ControllerVersionReq {
+  string node_uuid = 1; // UUID associated with this node
+  string node_addr = 2; // Address that we can send currency updates to
+  google.protobuf.Timestamp node_stale_at = 3; // When to consider this node stale
+}
+
 message ControllerVersionReply {
   string controller_version = 1;
 }
 
 message CurrencyPriceReq {
   repeated string currency_pairs = 1;
+  string node_uuid = 2; // UUID associated with this node
+  string node_addr = 3; // Address that we can send currency updates to
+  google.protobuf.Timestamp node_stale_at = 4; // When to consider this node stale
 }
 
 message CurrencyPriceReply {
@@ -31,6 +42,9 @@ message CurrencyPriceReply {
 
 message CurrencyPriceUpdateReq {
   repeated CurrencyItem currency_items = 1;
+  string node_uuid = 2; // UUID associated with this node
+  string node_addr = 3; // Address that we can send currency updates to
+  google.protobuf.Timestamp node_stale_at = 4; // When to consider this node stale
 }
 
 message CurrencyPriceUpdateReply {
@@ -38,10 +52,21 @@ message CurrencyPriceUpdateReply {
 }
 
 message CurrencyPriceSubscribeReq {
-  string nodeUuid = 1;
-  repeated string currency_pairs = 2;
+  repeated string currency_pairs = 1; // Currency pairs to subscribe this node to
+  string node_uuid = 2; // UUID associated with this node
+  string node_addr = 3; // Address that we can send currency updates to
+  google.protobuf.Timestamp node_stale_at = 4; // When to consider this node stale
 }
 
 message CurrencyPriceSubscribeReply {
   repeated string currency_pairs = 1;
+  string node_uuid = 2; // UUID associated with this node
+  string node_addr = 3; // Address that we can send currency updates to
+  google.protobuf.Timestamp node_stale_at = 4; // When to consider this node stale
+}
+
+message NodeKeepAliveReq {
+  string node_uuid = 1; // UUID associated with this node
+  string node_addr = 2; // Address that we can send currency updates to
+  google.protobuf.Timestamp node_stale_at = 3; // When to consider this node stale
 }

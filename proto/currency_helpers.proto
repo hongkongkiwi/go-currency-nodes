@@ -7,7 +7,7 @@ option go_package = "./";
 
 message CurrencyItem {
   string currency_pair = 1;
-  double price = 2;
+  double price = 2; // float64 in golang
   google.protobuf.Timestamp price_valid_at = 3;
 }
 

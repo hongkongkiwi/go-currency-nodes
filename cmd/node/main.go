@@ -71,7 +71,7 @@ func nodeStart() error {
 	// Start generating prices from price API
 	go priceGen.GenRandPricesForever(&wg, 1000, 5000, stopChan)
 	// Start our command server
-	go nodeServer.StartServer(&wg, helpers.NodeCfg.ListenAddr)
+	go nodeServer.StartServer(&wg)
 	// Subscribe to all currency pairs on server
 	go func() {
 		// Subscribe to updates of our currency pairs
@@ -81,6 +81,7 @@ func nodeStart() error {
 		// Start listening for price updates from our API
 		nodeClient.StartPriceUpdates(&wg, updatesChan, stopChan)
 	}()
+	go nodeClient.KeepAliveTick()
 	// Handle exit signals
 	go func() {
 		for {
@@ -162,8 +163,8 @@ func main() {
 					},
 				},
 				Action: func(cCtx *cli.Context) error {
-					helpers.NodeCfg.ListenAddr = fallbackEnv(cCtx.String("listenAddr"), "NODE_LISTEN_ADDR")
-					nodeClient.ControllerAddr = fallbackEnv(cCtx.String("controllerAddr"), "NODE_CONTROLLER_ADDR")
+					helpers.NodeCfg.NodeListenAddr = fallbackEnv(cCtx.String("listenAddr"), "NODE_LISTEN_ADDR")
+					helpers.NodeCfg.ControllerAddr = fallbackEnv(cCtx.String("controllerAddr"), "NODE_CONTROLLER_ADDR")
 					helpers.NodeCfg.Name = fallbackEnv(cCtx.String("name"), "NODE_NAME")
 					nodeUuid := fallbackEnv(cCtx.String("nodeUuid"), "NODE_UUID")
 					helpers.NodeCfg.CurrencyPairs = strings.Split(fallbackEnv(cCtx.String("currencyPairs"), "NODE_CURRENCY_PAIRS"), ",")

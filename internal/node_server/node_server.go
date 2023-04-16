@@ -82,7 +82,7 @@ func (s *grpcNodeCommandsServer) NodeStatus(ctx context.Context, _ *emptypb.Empt
 		NodeName:               helpers.NodeCfg.Name,
 		NodeVersion:            NodeVersion,
 		NodeUpdatesStreamState: pb.NodeStatusReply_NodeStreamState(nodeClient.NodePriceUpdatesState),
-		ControllerServer:       nodeClient.ControllerAddr,
+		ControllerServer:       helpers.NodeCfg.ControllerAddr,
 		CurrencyItems:          currencyItems,
 		// ConnectionState: ,
 		// CurrencyItems: ,
@@ -145,11 +145,11 @@ func (s *grpcNodeEventsServer) CurrencyPriceUpdatedEvent(ctx context.Context, in
 }
 
 // Start our gRPC server
-func StartServer(wg *sync.WaitGroup, listenAddr string) {
+func StartServer(wg *sync.WaitGroup) {
 	defer wg.Done()
 	// Create new store
 	nodeClient.NodePriceStore = kvs.NewKeyValueStore(1)
-	lis, err := net.Listen("tcp", listenAddr)
+	lis, err := net.Listen("tcp", helpers.NodeCfg.NodeListenAddr)
 	if err != nil {
 		log.Printf("failed to listen: %v", err)
 		return
