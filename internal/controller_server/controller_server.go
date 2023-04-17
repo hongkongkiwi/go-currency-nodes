@@ -18,6 +18,7 @@ import (
 	helpers "github.com/hongkongkiwi/go-currency-nodes/internal/helpers"
 	pb "github.com/hongkongkiwi/go-currency-nodes/pb"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -36,6 +37,10 @@ var rpcServer *grpc.Server
 // Keeps track of all node connections
 var NodeConnections map[string]*NodeConnection
 
+const nodeConnCleanupInterval = 10 * time.Second
+
+var nodeConnCleanupTicker *time.Ticker
+
 type NodeConnection struct {
 	NodeUUID uuid.UUID
 	NodeAddr string
@@ -47,10 +52,45 @@ type grpcControllerServer struct {
 	pb.ControllerCommandsServer
 }
 
+// Runs on a schedule and sends a keep alive to server with our address
+func CleanupNodeConnectionTick() {
+	nodeConnCleanupTicker = time.NewTicker(nodeConnCleanupInterval)
+	defer nodeConnCleanupTicker.Stop()
+	for {
+		// Cleanup tick
+		<-nodeConnCleanupTicker.C
+		for uuidStr, nodeConnection := range NodeConnections {
+			// Check if our connection is stale
+			if time.Now().After(nodeConnection.StaleAt) {
+				// if helpers.ControllerCfg.VerboseLog {
+				log.Printf("NodeConnection %s has become stale removing it", uuidStr)
+				// }
+				if nodeConnection.Conn != nil {
+					if nodeConnection.Conn.GetState() != connectivity.Shutdown {
+						// Close connection first
+						nodeConnection.Conn.Close()
+					}
+					// Remove from NodeConnections list
+					delete(NodeConnections, uuidStr)
+				}
+			}
+		}
+	}
+}
+
 func funcName() string {
 	pc, _, _, _ := runtime.Caller(1)
 	names := strings.Split(runtime.FuncForPC(pc).Name(), ".")
 	return names[len(names)-1]
+}
+
+func contains(s []string, str string) bool {
+	for _, v := range s {
+		if v == str {
+			return true
+		}
+	}
+	return false
 }
 
 /*
@@ -67,7 +107,7 @@ func updateNodeConnection(nodeUuid string, nodeAddr string, nodeStaleAt time.Tim
 		if existingConn.Conn == nil {
 			delete(NodeConnections, nodeUuid)
 			existingConn = nil
-			// Or our Node Address has changed then close and delete old connection
+			// Or our Node Address has changed then close and delete old connection for this UUID
 		} else if existingConn.NodeAddr != nodeAddr {
 			NodeConnections[nodeUuid].Conn.Close()
 			delete(NodeConnections, nodeUuid)
@@ -90,7 +130,11 @@ func updateNodeConnection(nodeUuid string, nodeAddr string, nodeStaleAt time.Tim
 			Conn:     conn,
 			StaleAt:  nodeStaleAt,
 		}
+		fmt.Printf("new updateNodeConnection: %s = %s\n", nodeUuid, nodeAddr)
+	} else {
+		fmt.Printf("existing updateNodeConnection: %s = %s\n", nodeUuid, nodeAddr)
 	}
+	fmt.Printf("NodeConnections: %v\n", NodeConnections)
 	return nil
 }
 
@@ -188,21 +232,33 @@ func (s *grpcControllerServer) CurrencyPriceSubscribe(ctx context.Context, in *p
 	// Update connection details based on this request
 	updateNodeConnection(in.NodeUuid, in.NodeAddr, in.NodeStaleAt.AsTime())
 	var replyCurrencyItems []*pb.CurrencyItem
-	// Loop through our currency pairs for subscriptions
-	for _, currencyPair := range in.CurrencyPairs {
-		// Get all subscriptions for this currency pair
-		subItem, _ := ControllerSubscriptionsStore.Get(currencyPair)
-		if subItem == nil {
-			subItem = helpers.NewSubscriptionStoreItem([]string{in.NodeUuid})
+	// Loop through ALL local currency pairs so we can see whether to subscribe or not
+	for _, currencyPair := range helpers.ControllerCfg.CurrencyPairs {
+		// Check if we want to subscribe to this currency pair
+		if contains(in.CurrencyPairs, currencyPair) {
+			subItem, _ := ControllerSubscriptionsStore.Get(currencyPair)
+			if subItem != nil {
+				subItem.SetUUID(in.NodeUuid)
+			} else {
+				subItem = helpers.NewSubscriptionStoreItemFromUUID(currencyPair, in.NodeUuid)
+			}
+			// Save our updated item back the store
+			setErr := ControllerSubscriptionsStore.Set(currencyPair, subItem)
+			if setErr != nil {
+				log.Printf("Error setting in currency subscription store %v", setErr)
+			}
+			if currItem, _ := ControllerPriceStore.Get(currencyPair); currItem != nil {
+				replyCurrencyItems = append(replyCurrencyItems, &pb.CurrencyItem{
+					Price:        currItem.Price,
+					PriceValidAt: timestamppb.New(currItem.ValidAt),
+				})
+			}
+			// Unsubscribe from this currency pair since it's not in our list
 		} else {
-			subItem.UUIDs = append(subItem.UUIDs, in.NodeUuid)
-		}
-		ControllerSubscriptionsStore.Set(currencyPair, subItem)
-		if currItem, _ := ControllerPriceStore.Get(currencyPair); currItem != nil {
-			replyCurrencyItems = append(replyCurrencyItems, &pb.CurrencyItem{
-				Price:        currItem.Price,
-				PriceValidAt: timestamppb.New(currItem.ValidAt),
-			})
+			if subItem, _ := ControllerSubscriptionsStore.Get(currencyPair); subItem != nil {
+				subItem.DeleteUUID(in.NodeUuid)
+				ControllerSubscriptionsStore.Set(currencyPair, subItem)
+			}
 		}
 	}
 	return &pb.CurrencyPriceSubscribeReply{CurrencyItems: replyCurrencyItems}, nil
@@ -212,6 +268,7 @@ func StartServer(wg *sync.WaitGroup, priceChan chan map[string]*helpers.Currency
 	defer wg.Done()
 	priceUpdatesChan = priceChan
 	NodeConnections = make(map[string]*NodeConnection)
+	go CleanupNodeConnectionTick()
 	var openErr error
 	// Create new store to store prices on controller
 	ControllerPriceStore, openErr = helpers.NewDiskCurrencyStore(helpers.ControllerCfg.DiskKVDir, "controller_price_store")

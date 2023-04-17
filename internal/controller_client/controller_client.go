@@ -43,22 +43,24 @@ func StartMonitoringForPriceUpdates(wg *sync.WaitGroup, priceChan chan map[strin
 
 // Controller calls this on node when a new price comes in
 // rpc CurrencyPriceUpdatedEvent (CurrencyPriceUpdateEventReq) returns (google.protobuf.Empty) {}
-func ClientCurrencyPriceUpdatedEvent(updatedCurrencyStoreItems map[string]*helpers.CurrencyStoreItem) error {
+func ClientCurrencyPriceUpdatedEvent(updatedCurrencyItems map[string]*helpers.CurrencyStoreItem) error {
 	fmt.Printf("ClientCurrencyPriceUpdatedEvent\n")
-	// Keep a temporary list of currencies & connections to send out
-	currenciesToSend := make(map[*cs.NodeConnection][]*pb.CurrencyItem)
+
+	// Keep a temporary list of uuids and associated currency items
+	sendToUUIDs := make(map[string][]*pb.CurrencyItem)
+
 	// Loop through all currency store item updates
-	for currencyPair, storeItem := range updatedCurrencyStoreItems {
+	for currencyPair, storeItem := range updatedCurrencyItems {
 		fmt.Printf("ClientCurrencyPriceUpdatedEvent Currencies %s\n", currencyPair)
 		// Check all node uuids we should notify for this currency pair
-		subsForCurrency, _ := cs.ControllerSubscriptionsStore.Get(currencyPair)
-		if subsForCurrency == nil {
-			fmt.Printf("No subscriptions for currency %s", subsForCurrency)
+		subs, _ := cs.ControllerSubscriptionsStore.Get(currencyPair)
+		if subs == nil {
+			fmt.Printf("No subscriptions for currency %s", subs.CurrencyPair)
+			continue
 		}
-		if subsForCurrency != nil {
-			fmt.Printf("ClientCurrencyPriceUpdatedEvent Subscriptions %s\n", subsForCurrency.UUIDs)
-			for i := 0; i < len(subsForCurrency.UUIDs); i++ {
-				uuidStr := subsForCurrency.UUIDs[i]
+		if subs != nil {
+			fmt.Printf("ClientCurrencyPriceUpdatedEvent Subscriptions %s\n", subs.UUIDs())
+			for _, uuidStr := range subs.UUIDs() {
 				uuid, uuidErr := uuid.FromString(uuidStr)
 				if uuidErr != nil {
 					log.Printf("invalid node uuid sent: %s", uuidErr)
@@ -69,38 +71,43 @@ func ClientCurrencyPriceUpdatedEvent(updatedCurrencyStoreItems map[string]*helpe
 					fmt.Printf("skip UUID because it sent this update %s\n", uuid)
 					continue
 				}
-				nodeConnection := cs.NodeConnections[uuidStr]
-				if nodeConnection != nil {
-					fmt.Printf("ClientCurrencyPriceUpdatedEvent Node Connection %s %s\n", nodeConnection.NodeUUID, nodeConnection.NodeAddr)
-					// Check if our connection is stale
-					if nodeConnection.StaleAt.Before(time.Now()) {
-						currenciesToSend[nodeConnection] = append(currenciesToSend[nodeConnection], &pb.CurrencyItem{
-							Price:        storeItem.Price,
-							PriceValidAt: timestamppb.New(storeItem.ValidAt),
-						})
-					} else {
-						// Close connection first
-						nodeConnection.Conn.Close()
-						// Connection is stale remove it from collection
-						delete(cs.NodeConnections, uuidStr)
-					}
-				}
+				fmt.Printf("we will send update to this UUID %s\n", uuid)
+				sendToUUIDs[uuidStr] = append(sendToUUIDs[uuidStr], &pb.CurrencyItem{
+					Price:        storeItem.Price,
+					PriceValidAt: timestamppb.New(storeItem.ValidAt),
+				})
 			}
 		}
 	}
-	// Loop through each connection and send out relevant currency items
-	for nodeConnection, currencyItems := range currenciesToSend {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(RequestTimeout))
-		defer cancel()
-		reply := &pb.CurrencyPriceUpdateEventReq{CurrencyItems: currencyItems}
-		log.Printf("%s->gRPC->Outgoing: %s\n%s\n", debugName, funcName(), protojson.Format(reply))
-		c := pb.NewNodeEventsClient(nodeConnection.Conn)
-		_, sendErr := c.CurrencyPriceUpdatedEvent(ctx, reply)
-		if sendErr != nil {
-			log.Printf("%s->gRPC->ERROR Outgoing: %s\n%v\n", debugName, funcName(), sendErr)
+
+	// Chceck that we have a connection for each uuid we wamt tp semd tp
+	for uuidStr, currencyItems := range sendToUUIDs {
+		nodeConnection := cs.NodeConnections[uuidStr]
+		if nodeConnection == nil {
+			fmt.Printf("-> not connection found for this UUID! %s\n", uuidStr)
+			continue
+		}
+		fmt.Printf("ClientCurrencyPriceUpdatedEvent Node Connection %s %s\n", nodeConnection.NodeUUID, nodeConnection.NodeAddr)
+		// Check if our connection is stale
+		if time.Now().Before(nodeConnection.StaleAt) {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Duration(RequestTimeout))
+			defer cancel()
+			reply := &pb.CurrencyPriceUpdateEventReq{CurrencyItems: currencyItems}
+			log.Printf("%s->gRPC->Outgoing: %s\n%s\n", debugName, funcName(), protojson.Format(reply))
+			c := pb.NewNodeEventsClient(nodeConnection.Conn)
+			_, sendErr := c.CurrencyPriceUpdatedEvent(ctx, reply)
+			if sendErr != nil {
+				log.Printf("%s->gRPC->ERROR Outgoing: %s\n%v\n", debugName, funcName(), sendErr)
+			} else {
+				// Send currency updates to this UUID
+				fmt.Printf("Sent update to to [%s]: %s\n", &nodeConnection.NodeUUID, currencyItems)
+			}
 		} else {
-			// Send currency updates to this UUID
-			fmt.Printf("Sent update to to [%s]: %s\n", &nodeConnection.NodeUUID, currencyItems)
+			fmt.Printf("ClientCurrencyPriceUpdatedEvent Node Connection Stale %s\n", nodeConnection.NodeUUID)
+			// Close connection first
+			nodeConnection.Conn.Close()
+			// Connection is stale remove it from collection
+			delete(cs.NodeConnections, uuidStr)
 		}
 	}
 	return nil

@@ -17,6 +17,8 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 )
 
+const defaultDiskStoreDir = "/tmp/currency"
+
 type CurrencyStore struct {
 	store *badger.DB
 }
@@ -28,21 +30,93 @@ type CurrencyStoreItem struct {
 	UpdatedByUUID uuid.UUID `bson:"updated_by_uuid"`
 }
 
-func NewSubscriptionStoreItem(uuids []string) *SubscriptionStoreItem {
-	return &SubscriptionStoreItem{
-		UUIDs: uuids,
-	}
-}
-
 type SubscriptionStore struct {
 	store *badger.DB
 }
 
 type SubscriptionStoreItem struct {
-	UUIDs []string `bson:"uuids"`
+	CurrencyPair string `bson:"currency_pair"`
+	// We are using a map here so we can remove duplicates
+	UuidMap map[string]bool `bson:"uuid_map,omitempty,inline"`
 }
 
-const defaultStoreDir = "/tmp/currency"
+func NewSubscriptionStoreItem(newCurrencyPair string) *SubscriptionStoreItem {
+	ssi := &SubscriptionStoreItem{
+		CurrencyPair: newCurrencyPair,
+	}
+	ssi.UuidMap = make(map[string]bool)
+	return ssi
+}
+
+func NewSubscriptionStoreItemFromUUID(newCurrencyPair string, newUuid string) *SubscriptionStoreItem {
+	ssi := &SubscriptionStoreItem{
+		CurrencyPair: newCurrencyPair,
+	}
+	ssi.SetUUID(newUuid)
+	return ssi
+}
+
+func NewSubscriptionStoreItemFromUUIDs(newCurrencyPair string, newUuids []string) *SubscriptionStoreItem {
+	ssi := &SubscriptionStoreItem{
+		CurrencyPair: newCurrencyPair,
+	}
+	ssi.SetAllUUIDs(newUuids)
+	return ssi
+}
+
+func (ssi *SubscriptionStoreItem) ContainsUUID(uuid string) bool {
+	if ssi.UuidMap == nil {
+		return false
+	}
+	if _, ok := ssi.UuidMap[uuid]; ok {
+		return true
+	}
+	return false
+}
+
+func (ssi *SubscriptionStoreItem) SetAllUUIDs(uuids []string) {
+	if ssi.UuidMap == nil {
+		ssi.UuidMap = make(map[string]bool)
+	}
+	for i := 0; i < len(uuids); i++ {
+		uuid := uuids[i]
+		if uuid != "" {
+			// Set a throwaway value
+			ssi.UuidMap[uuids[i]] = true
+		}
+	}
+}
+
+func (ssi *SubscriptionStoreItem) SetUUID(uuid string) {
+	if ssi.UuidMap == nil {
+		ssi.UuidMap = make(map[string]bool)
+	}
+	// Set a throwaway value
+	ssi.UuidMap[uuid] = true
+}
+
+func (ssi *SubscriptionStoreItem) UUIDs() []string {
+	if ssi.UuidMap == nil {
+		return make([]string, 0)
+	}
+	keys := make([]string, len(ssi.UuidMap))
+	i := 0
+	for k := range ssi.UuidMap {
+		keys[i] = k
+		i++
+	}
+	return keys
+}
+
+func (ssi *SubscriptionStoreItem) DeleteUUID(uuid string) {
+	if ssi.UuidMap != nil {
+		delete(ssi.UuidMap, uuid)
+	}
+}
+
+func (ssi *SubscriptionStoreItem) DeletAllUUIDs() {
+	ssi.UuidMap = make(map[string]bool)
+}
 
 func NewDiskCurrencyStore(storeDir, storeName string) (*CurrencyStore, error) {
 	cs := &CurrencyStore{}
@@ -68,6 +142,19 @@ func NewMemorySubscriptionStore() (*SubscriptionStore, error) {
 	return cs, nil
 }
 
+func (cs *SubscriptionStore) GetAllCurrencyPairsForUUID(uuid string) []string {
+	var subscribedCurrencyPairs []string
+	allCurrencyPairs, _ := cs.Keys()
+	for _, currencyPair := range allCurrencyPairs {
+		if currencySubItem, _ := cs.Get(currencyPair); currencySubItem != nil {
+			if currencySubItem.ContainsUUID(uuid) {
+				subscribedCurrencyPairs = append(subscribedCurrencyPairs, currencyPair)
+			}
+		}
+	}
+	return subscribedCurrencyPairs
+}
+
 func (cs *CurrencyStore) IsClosed() bool {
 	if cs.store == nil || cs.store.IsClosed() {
 		return true
@@ -77,7 +164,7 @@ func (cs *CurrencyStore) IsClosed() bool {
 
 func (cs *CurrencyStore) openDisk(storeDir string, storeName string) error {
 	if storeDir == "" {
-		storeDir = defaultStoreDir
+		storeDir = defaultDiskStoreDir
 	}
 	if storeName == "" {
 		return fmt.Errorf("missing store name")
@@ -261,7 +348,7 @@ func (ss *SubscriptionStore) IsClosed() bool {
 
 func (ss *SubscriptionStore) openDisk(storeDir string, storeName string) error {
 	if storeDir == "" {
-		storeDir = defaultStoreDir
+		storeDir = defaultDiskStoreDir
 	}
 	if storeName == "" {
 		return fmt.Errorf("missing store name")
