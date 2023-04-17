@@ -98,9 +98,9 @@ func (s *grpcNodeCommandsServer) NodeStatus(ctx context.Context, _ *emptypb.Empt
 		NodeVersion:       NodeVersion,
 		NodeUpdatesPaused: nodePriceGen.UpdatesPaused,
 		ControllerServer:  helpers.NodeCfg.ControllerAddr,
+		ListenAddress:     helpers.NodeCfg.NodeListenAddr,
+		AdvertiseAddress:  helpers.NodeCfg.NodeAdvertiseAddr,
 		CurrencyItems:     currencyItems,
-		// ConnectionState: ,
-		// CurrencyItems: ,
 	}, nil
 }
 
@@ -122,23 +122,25 @@ func (s *grpcNodeCommandsServer) NodeCurrenciesPriceEventsResume(ctx context.Con
 	return &emptypb.Empty{}, nil
 }
 
-// Request a list of all subscribed currencies
+// Request a list of all local currencies this node knows about
 // rpc NodeCurrencies (google.protobuf.Empty) returns (NodeSubscriptionsReply) {}
 func (s *grpcNodeCommandsServer) NodeCurrencies(ctx context.Context, _ *emptypb.Empty) (*pb.NodeCurrenciesReply, error) {
 	if helpers.NodeCfg.VerboseLog {
 		log.Printf("gRPC: %s", funcName())
 	}
-	currency_pairs, _ := nodeClient.NodePriceStore.Keys()
-	return &pb.NodeCurrenciesReply{CurrencyPairs: currency_pairs}, nil
-}
-
-// Request node to manually refresh prices from controller
-// rpc NodeCurrenciesRefreshPrices (google.protobuf.Empty) returns (google.protobuf.Empty) {}
-func (s *grpcNodeCommandsServer) NodeCurrenciesRefreshPrices(ctx context.Context, _ *emptypb.Empty) (*emptypb.Empty, error) {
-	if helpers.NodeCfg.VerboseLog {
-		log.Printf("gRPC: %s", funcName())
+	currencyPairs, _ := nodeClient.NodePriceStore.Keys()
+	fmt.Printf("log: %v", currencyPairs)
+	var replyCurrencyItems []*pb.CurrencyItem
+	for _, currencyPair := range currencyPairs {
+		if localItem, _ := nodeClient.NodePriceStore.Get(currencyPair); localItem != nil {
+			replyCurrencyItems = append(replyCurrencyItems, &pb.CurrencyItem{
+				CurrencyPair: currencyPair,
+				Price:        localItem.Price,
+				PriceValidAt: timestamppb.New(localItem.ValidAt),
+			})
+		}
 	}
-	return &emptypb.Empty{}, nil
+	return &pb.NodeCurrenciesReply{CurrencyItems: replyCurrencyItems}, nil
 }
 
 // Kill the Node
@@ -174,7 +176,7 @@ func (s *grpcNodeEventsServer) CurrencyPriceUpdatedEvent(ctx context.Context, in
 	for i, curr := range in.CurrencyItems {
 		logOutputPrices[i] = [2]string{curr.CurrencyPair, fmt.Sprintf("%0.2f", curr.Price)}
 	}
-	log.Printf("Received price updates from server %v\n", logOutputPrices)
+	log.Printf("Received price updates from controller %v\n", logOutputPrices)
 
 	return &emptypb.Empty{}, nil
 }
@@ -183,13 +185,6 @@ func (s *grpcNodeEventsServer) CurrencyPriceUpdatedEvent(ctx context.Context, in
 func StartServer(wg *sync.WaitGroup, updatesChan chan map[string]*nodePriceGen.PriceCurrency) {
 	defer wg.Done()
 	priceUpdatesChan = updatesChan
-	// Create new store
-	var storeErr error
-	nodeClient.NodePriceStore, storeErr = helpers.NewMemoryCurrencyStore()
-	if storeErr != nil {
-		// We shouldn't get here! something is very wrong
-		panic(storeErr)
-	}
 	lis, err := net.Listen("tcp", helpers.NodeCfg.NodeListenAddr)
 	if err != nil {
 		log.Printf("failed to listen: %v", err)
@@ -198,7 +193,7 @@ func StartServer(wg *sync.WaitGroup, updatesChan chan map[string]*nodePriceGen.P
 	s := grpc.NewServer()
 	pb.RegisterNodeCommandsServer(s, &grpcNodeCommandsServer{})
 	pb.RegisterNodeEventsServer(s, &grpcNodeEventsServer{})
-	log.Printf("server listening at %v", lis.Addr())
+	log.Printf("node server listening at %v", lis.Addr())
 	// Register reflection to help with debugging via CLI
 	reflection.Register(s)
 	if err := s.Serve(lis); err != nil {
@@ -208,5 +203,5 @@ func StartServer(wg *sync.WaitGroup, updatesChan chan map[string]*nodePriceGen.P
 }
 
 func StopServer() {
-	log.Println("server closed")
+	log.Println("node server closed")
 }

@@ -64,12 +64,19 @@ func nodeStart() error {
 	signal.Notify(sigChan)
 	atexit.Register(gracefulExitHandler)
 
+	// Create new store
+	var storeErr error
+	nodeClient.NodePriceStore, storeErr = helpers.NewMemoryCurrencyStore()
+	if storeErr != nil {
+		// We shouldn't get here! something is very wrong
+		panic(storeErr)
+	}
 	updatesChan := make(chan map[string]*nodePriceGen.PriceCurrency)
 	stopChan = make(chan bool)
 	priceGen, _ = nodePriceGen.NewPriceGeneratorApi(helpers.NodeCfg.CurrencyPairs, updatesChan)
 	// Start generating prices from price API
 	wg.Add(1)
-	go priceGen.GenRandPricesForever(&wg, 1000, 5000, stopChan)
+	go priceGen.GenRandPricesForever(&wg, uint16(helpers.NodeCfg.UpdatesMinFreq), uint16(helpers.NodeCfg.UpdatesMaxFreq), stopChan)
 	// Start our command server
 	wg.Add(1)
 	go nodeServer.StartServer(&wg, updatesChan)
@@ -177,6 +184,24 @@ func main() {
 						Usage:   "turn on verbose logging for this node",
 						EnvVars: []string{"NODE_LOG_VERBOSE"},
 					},
+					&cli.DurationFlag{
+						Name:    "updates-min-freq",
+						Value:   time.Duration(1 * time.Second),
+						Usage:   "minimum time to random generate an update",
+						EnvVars: []string{"NODE_PRICEUPDATES_MIN_FREQ"},
+					},
+					&cli.DurationFlag{
+						Name:    "updates-max-freq",
+						Value:   time.Duration(5 * time.Second),
+						Usage:   "maximum time to random generate an update",
+						EnvVars: []string{"NODE_PRICEUPDATES_MAX_FREQ"},
+					},
+					&cli.UintFlag{
+						Name:    "updates-percent",
+						Value:   20,
+						Usage:   "percentage to change prices when generating update",
+						EnvVars: []string{"NODE_PRICEUPDATES_PERCENT"},
+					},
 					&cli.StringSliceFlag{
 						Name:    "currencies",
 						Aliases: []string{"currency-pairs", "pairs"},
@@ -199,6 +224,9 @@ func main() {
 					helpers.NodeCfg.NodeAdvertiseAddr = cCtx.String("advertise")
 					helpers.NodeCfg.ControllerAddr = cCtx.String("controller")
 					helpers.NodeCfg.Name = cCtx.String("name")
+					helpers.NodeCfg.UpdatesMinFreq = cCtx.Duration("updates-min-freq")
+					helpers.NodeCfg.UpdatesMaxFreq = cCtx.Duration("updates-max-freq")
+					helpers.NodeCfg.UpdatesPercentChange = cCtx.Uint("updates-percent")
 					nodeUuid := strings.ToLower(cCtx.String("uuid"))
 					if nodeUuid == "" {
 						log.Printf("WARNING: we randomly generated UUID it is better to pass fixed one for this node")

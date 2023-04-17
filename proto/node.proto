@@ -13,20 +13,9 @@ message NodeStatusReply {
   string node_version = 3; // app version of this node
   bool node_updates_paused = 4;
   string controller_server = 5;
-  message NodeConnectionState {
-    enum ConnectionState {
-      DISCONNECTED = 0;
-      CONNECTED = 1;
-      ERROR = 2;
-    }
-    ConnectionState connection_state = 1;
-    string connected_controller_server = 2;
-    string connection_error = 3;
-    google.protobuf.Timestamp connected_at = 4;
-    google.protobuf.Timestamp disconnected_at = 5;
-  }
-  NodeConnectionState connection_state = 6;
-  repeated CurrencyItem currency_items = 7;
+  string listen_address = 6;
+  string advertise_address = 7;
+  repeated CurrencyItem currency_items = 8;
 }
 
 service NodeCommands {
@@ -69,7 +58,7 @@ message NodeManualPriceUpdateReq {
 
 // rpc NodeCurrencies
 message NodeCurrenciesReply {
-  repeated string currency_pairs = 1; 
+  repeated CurrencyItem currency_items = 1;
 }
 
 service NodeEvents {

@@ -176,17 +176,10 @@ func main() {
 					{
 						Name:    "subscriptions",
 						Aliases: []string{"c"},
-						Usage:   "options for node subscriptions",
-						Subcommands: []*cli.Command{
-							{
-								Name:    "list",
-								Aliases: []string{"l"},
-								Usage:   "list all subscriptions (and known prices)",
-								Action: func(cCtx *cli.Context) error {
-									clientArgs(cCtx)
-									return cliClient.ClientNodeCurrencies()
-								},
-							},
+						Usage:   "list all subscriptions (and known prices)",
+						Action: func(cCtx *cli.Context) error {
+							clientArgs(cCtx)
+							return cliClient.ClientNodeCurrencies()
 						},
 					},
 				},

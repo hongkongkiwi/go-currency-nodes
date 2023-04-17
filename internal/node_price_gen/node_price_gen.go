@@ -19,8 +19,6 @@ import (
 
 var seedRand *rand.Rand
 
-const percentChange = 20
-
 var UpdatesPaused = false
 
 type PriceGeneratorApi struct {
@@ -44,7 +42,7 @@ func genRandPrice(lower, upper float64) float64 {
 	return truncate(lower+math.Abs(seedRand.Float64())*(upper-lower), lower)
 }
 
-func genRandWithinPercent(currPrice float64, percent uint8) float64 {
+func genRandWithinPercent(currPrice float64, percent uint) float64 {
 	upperValue := math.Max(0.01, currPrice*(1+float64(percent)/100))
 	lowerValue := math.Max(0.01, currPrice*(1-float64(percent)/100))
 	return genRandPrice(lowerValue, upperValue)
@@ -104,7 +102,7 @@ func removeDuplicateInt(intSlice []int) []int {
 }
 
 // Take a random selection of currency pairs and updates them by a percentage
-func (pg *PriceGeneratorApi) GenRandPrices(percent uint8) {
+func (pg *PriceGeneratorApi) GenRandPrices(percent uint) {
 	// If we have no currency pairs then we cannot generate any prices
 	if len(pg.currencyPairs) == 0 {
 		return
@@ -165,7 +163,7 @@ func (pg *PriceGeneratorApi) GenRandPricesForever(wg *sync.WaitGroup, minMs, max
 				return
 			}
 		default:
-			pg.GenRandPrices(percentChange)
+			pg.GenRandPrices(helpers.NodeCfg.UpdatesPercentChange)
 			sleepTime := seedRand.Intn(int(maxMs-minMs+1)) + int(minMs)
 			if helpers.NodeCfg.VerboseLog {
 				fmt.Printf("Price Generator: Sleeping for %vms\n", sleepTime)
