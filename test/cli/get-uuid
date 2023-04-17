@@ -1,0 +1,5 @@
+#!/bin/sh -ue
+if [ "$(dirname "$0")/../../build/cli" ]; then
+  make -f "$(dirname "$0")/../../Makefile" cli
+fi
+exec "$(dirname "$0")/../../build/cli" node uuid

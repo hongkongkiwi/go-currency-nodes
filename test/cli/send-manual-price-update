@@ -1,0 +1,12 @@
+#!/bin/sh -ue
+if [ "$(dirname "$0")/../../build/cli" ]; then
+  make -f "$(dirname "$0")/../../Makefile" cli
+fi
+if [ -z "$1" ]; then
+  echo >&2 "Must pass currency pair e.g. USD_HKD"; exit 1
+fi
+if [ -z "$2" ]; then
+  echo >&2 "Must price e.g. 50.2"; exit 1
+fi
+exec "$(dirname "$0")/../../build/cli" node priceupdates new \
+  --price "$2" --currency-pair "$1"

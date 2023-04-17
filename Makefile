@@ -8,6 +8,7 @@ DOCKER_TAG := github.com/hongkongkiwi/go-currency-nodes
 GO_PKG := github.com/hongkongkiwi/go-currency-nodes
 PROTO_INPUT_DIR := proto
 PROTO_OUTPUT_DIR := gen/pb
+DOCKER_INSTANCEDATA_DIR := ./docker/instancedata
 
 all: gen build
 
@@ -90,8 +91,12 @@ build_node: check_go proto_gen
 	@mkdir -p $(BUILD_DIR)
 	go build -o $(BUILD_DIR)/node $(GO_PKG)/cmd/node
 
+.PHONY: clean_dockerdata # Clean docker instance data
+clean_dockerdata:
+	rm -Rf $(DOCKER_INSTANCEDATA_DIR)/*
+
 .PHONY: clean # Clean all build files
-clean:
+clean: clean_dockerdata
 	 rm -Rf $(PROTO_OUTPUT_DIR)/* $(BUILD_DIR)/*
 
 .PHONY: list # List all targets

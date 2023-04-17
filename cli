@@ -1,0 +1,5 @@
+#!/bin/sh -ue
+if [ ! -f "./build/cli" ]; then
+  make cli
+fi
+exec ./build/cli $@

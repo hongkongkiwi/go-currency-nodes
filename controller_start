@@ -1,2 +1,2 @@
 #!/bin/sh -ue
-./build/controller start
+exec docker compose run --rm -it --service-ports controller1 $@

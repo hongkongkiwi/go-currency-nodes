@@ -125,10 +125,17 @@ func main() {
 				Flags: []cli.Flag{
 					&cli.StringFlag{
 						Name:    "address",
-						Aliases: []string{"listen_address"},
+						Aliases: []string{"listen-address"},
 						Value:   "127.0.0.1:5051",
 						Usage:   "set listen address for this node",
 						EnvVars: []string{"NODE_LISTEN_ADDR"},
+					},
+					&cli.StringFlag{
+						Name:    "advertise",
+						Aliases: []string{"advertise-address"},
+						Value:   "127.0.0.1:5051",
+						Usage:   "set advertise address for this node",
+						EnvVars: []string{"NODE_ADVERTISE_ADDR"},
 					},
 					&cli.StringFlag{
 						Name:    "controller",
@@ -138,14 +145,14 @@ func main() {
 					},
 					&cli.StringFlag{
 						Name:    "uuid",
-						Aliases: []string{"node_uuid"},
+						Aliases: []string{"node-uuid"},
 						Value:   "",
 						Usage:   "set uuid for this node (will generate random)",
 						EnvVars: []string{"NODE_UUID"},
 					},
 					&cli.StringFlag{
 						Name:    "name",
-						Aliases: []string{"node_name"},
+						Aliases: []string{"node-name"},
 						Value:   "",
 						Usage:   "set name for this node",
 						EnvVars: []string{"NODE_NAME"},
@@ -158,7 +165,8 @@ func main() {
 						EnvVars: []string{"NODE_KEEPALIVE_INTERVAL"},
 					},
 					&cli.BoolFlag{
-						Name:    "start_paused",
+						Name:    "paused",
+						Aliases: []string{"start-paused"},
 						Value:   false,
 						Usage:   "do not generate price updates on this node, just listen",
 						EnvVars: []string{"NODE_PAUSE_UPDATES"},
@@ -171,7 +179,7 @@ func main() {
 					},
 					&cli.StringSliceFlag{
 						Name:    "currencies",
-						Aliases: []string{"currency_pairs"},
+						Aliases: []string{"currency-pairs", "pairs"},
 						Value: cli.NewStringSlice(
 							"USD_HKD",
 							"HKD_USD",
@@ -188,6 +196,7 @@ func main() {
 				},
 				Action: func(cCtx *cli.Context) error {
 					helpers.NodeCfg.NodeListenAddr = cCtx.String("address")
+					helpers.NodeCfg.NodeAdvertiseAddr = cCtx.String("advertise")
 					helpers.NodeCfg.ControllerAddr = cCtx.String("controller")
 					helpers.NodeCfg.Name = cCtx.String("name")
 					nodeUuid := strings.ToLower(cCtx.String("uuid"))
@@ -205,8 +214,9 @@ func main() {
 					}
 					helpers.NodeCfg.CurrencyPairs = cCtx.StringSlice("currencies")
 					helpers.NodeCfg.VerboseLog = cCtx.Bool("verbose")
-					nodePriceGen.UpdatesPaused = cCtx.Bool("start_paused")
+					nodePriceGen.UpdatesPaused = cCtx.Bool("paused")
 					helpers.NodeCfg.KeepAliveInterval = cCtx.Duration("keepalive")
+
 					if helpers.NodeCfg.KeepAliveInterval < 1 {
 						return fmt.Errorf("keepalive interval must be greater than 0")
 					}

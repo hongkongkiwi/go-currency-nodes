@@ -1,0 +1,2 @@
+#!/bin/sh -ue
+exec ./../../build/cli node priceupdates pause

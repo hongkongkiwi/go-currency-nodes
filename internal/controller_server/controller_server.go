@@ -268,7 +268,6 @@ func StartServer(wg *sync.WaitGroup, priceChan chan map[string]*helpers.Currency
 	defer wg.Done()
 	priceUpdatesChan = priceChan
 	NodeConnections = make(map[string]*NodeConnection)
-	go CleanupNodeConnectionTick()
 	var openErr error
 	// Create new store to store prices on controller
 	ControllerPriceStore, openErr = helpers.NewDiskCurrencyStore(helpers.ControllerCfg.DiskKVDir, "controller_price_store")
@@ -280,6 +279,7 @@ func StartServer(wg *sync.WaitGroup, priceChan chan map[string]*helpers.Currency
 	if openErr != nil {
 		return openErr
 	}
+	go CleanupNodeConnectionTick()
 	lis, listenErr := net.Listen("tcp", helpers.ControllerCfg.ControllerListenAddr)
 	if listenErr != nil {
 		return fmt.Errorf("failed to listen controller server: %v", listenErr)

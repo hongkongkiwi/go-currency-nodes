@@ -120,27 +120,28 @@ func (ssi *SubscriptionStoreItem) DeletAllUUIDs() {
 
 func NewDiskCurrencyStore(storeDir, storeName string) (*CurrencyStore, error) {
 	cs := &CurrencyStore{}
-	cs.openDisk(storeDir, storeName)
-	return cs, nil
+	err := cs.openDisk(storeDir, storeName)
+	return cs, err
 }
 
 func NewMemoryCurrencyStore() (*CurrencyStore, error) {
 	cs := &CurrencyStore{}
-	cs.openMem()
-	return cs, nil
+	err := cs.openMem()
+	return cs, err
 }
 
 func NewDiskSubscriptionStore(storeDir, storeName string) (*SubscriptionStore, error) {
 	cs := &SubscriptionStore{}
-	cs.openDisk(storeDir, storeName)
-	return cs, nil
+	err := cs.openDisk(storeDir, storeName)
+	return cs, err
 }
 
-func NewMemorySubscriptionStore() (*SubscriptionStore, error) {
-	cs := &SubscriptionStore{}
-	cs.openMem()
-	return cs, nil
-}
+// We don't need this
+// func NewMemorySubscriptionStore() (*SubscriptionStore, error) {
+// 	cs := &SubscriptionStore{}
+// 	err := cs.openMem()
+// 	return cs, err
+// }
 
 func (cs *SubscriptionStore) GetAllCurrencyPairsForUUID(uuid string) []string {
 	var subscribedCurrencyPairs []string
@@ -364,17 +365,17 @@ func (ss *SubscriptionStore) openDisk(storeDir string, storeName string) error {
 	return nil
 }
 
-func (ss *SubscriptionStore) openMem() error {
-	// Open the Badger database located in the /tmp/badger directory.
-	// It will be created if it doesn't exist.
-	var currStoreErr error
-	opt := badger.DefaultOptions("").WithInMemory(true)
-	ss.store, currStoreErr = badger.Open(opt)
-	if currStoreErr != nil {
-		return currStoreErr
-	}
-	return nil
-}
+// func (ss *SubscriptionStore) openMem() error {
+// 	// Open the Badger database located in the /tmp/badger directory.
+// 	// It will be created if it doesn't exist.
+// 	var currStoreErr error
+// 	opt := badger.DefaultOptions("").WithInMemory(true)
+// 	ss.store, currStoreErr = badger.Open(opt)
+// 	if currStoreErr != nil {
+// 		return currStoreErr
+// 	}
+// 	return nil
+// }
 
 func (ss *SubscriptionStore) Close() {
 	if ss.store != nil {

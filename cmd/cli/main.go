@@ -12,7 +12,7 @@ import (
 
 const cli_version = "0.0.1"
 const defaultNodeAddr = "127.0.0.1:5051"
-const defaultNodeRequestTimeout = uint64(time.Millisecond * 80)
+const defaultNodeRequestTimeout = time.Duration(time.Millisecond * 80)
 
 func cliVersion() error {
 	fmt.Println("cli version:", cli_version)
@@ -46,7 +46,7 @@ func main() {
 						EnvVars: []string{"NODE_REMOTE_ADDR"},
 						Usage:   "address of the node to connect to",
 					},
-					&cli.Uint64Flag{
+					&cli.DurationFlag{
 						Name:    "timeout",
 						Value:   defaultNodeRequestTimeout,
 						EnvVars: []string{"NODE_REMOTE_TIMEOUT"},
@@ -61,6 +61,15 @@ func main() {
 						Action: func(cCtx *cli.Context) error {
 							clientArgs(cCtx)
 							return cliClient.ClientNodeUUID()
+						},
+					},
+					{
+						Name:    "currencies",
+						Aliases: []string{"c"},
+						Usage:   "show the currencies this node knows about",
+						Action: func(cCtx *cli.Context) error {
+							clientArgs(cCtx)
+							return cliClient.ClientNodeCurrencies()
 						},
 					},
 					{

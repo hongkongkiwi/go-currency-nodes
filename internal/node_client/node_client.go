@@ -172,7 +172,7 @@ func ClientControllerVersion() error {
 	defer cancel()
 	r, err := c.ControllerVersion(ctx, &pb.ControllerVersionReq{
 		NodeUuid:    helpers.NodeCfg.UUID.String(),
-		NodeAddr:    helpers.NodeCfg.NodeListenAddr,
+		NodeAddr:    helpers.NodeCfg.NodeAdvertiseAddr,
 		NodeStaleAt: timestamppb.New(time.Now().Add(helpers.NodeCfg.KeepAliveInterval + 1)),
 	})
 	if err != nil {
@@ -196,7 +196,7 @@ func ClientControllerKeepAlive() error {
 	defer cancel()
 	_, sendErr := c.NodeKeepAlive(ctx, &pb.NodeKeepAliveReq{
 		NodeUuid:    helpers.NodeCfg.UUID.String(),
-		NodeAddr:    helpers.NodeCfg.NodeListenAddr,
+		NodeAddr:    helpers.NodeCfg.NodeAdvertiseAddr,
 		NodeStaleAt: timestamppb.New(time.Now().Add(helpers.NodeCfg.KeepAliveInterval + 1)),
 	})
 	if sendErr != nil {
@@ -224,7 +224,7 @@ func ClientControllerCurrencyPrice() error {
 	r, sendErr := c.CurrencyPrice(ctx, &pb.CurrencyPriceReq{
 		CurrencyPairs: helpers.NodeCfg.CurrencyPairs,
 		NodeUuid:      helpers.NodeCfg.UUID.String(),
-		NodeAddr:      helpers.NodeCfg.NodeListenAddr,
+		NodeAddr:      helpers.NodeCfg.NodeAdvertiseAddr,
 		NodeStaleAt:   timestamppb.New(time.Now().Add(helpers.NodeCfg.KeepAliveInterval + 1)),
 	})
 	if sendErr != nil {
@@ -270,7 +270,7 @@ func ClientControllerCurrencyPriceUpdateAll() error {
 		r, sendErr := c.CurrencyPriceUpdate(ctx, &pb.CurrencyPriceUpdateReq{
 			CurrencyItems: currencyItems,
 			NodeUuid:      helpers.NodeCfg.UUID.String(),
-			NodeAddr:      helpers.NodeCfg.NodeListenAddr,
+			NodeAddr:      helpers.NodeCfg.NodeAdvertiseAddr,
 			NodeStaleAt:   timestamppb.New(time.Now().Add(helpers.NodeCfg.KeepAliveInterval + 1)),
 		})
 		if sendErr != nil {
@@ -309,7 +309,7 @@ func ClientControllerCurrencyPriceUpdate(currencyPairs []string) error {
 		r, sendErr := c.CurrencyPriceUpdate(ctx, &pb.CurrencyPriceUpdateReq{
 			CurrencyItems: currencyItems,
 			NodeUuid:      helpers.NodeCfg.UUID.String(),
-			NodeAddr:      helpers.NodeCfg.NodeListenAddr,
+			NodeAddr:      helpers.NodeCfg.NodeAdvertiseAddr,
 			NodeStaleAt:   timestamppb.New(time.Now().Add(helpers.NodeCfg.KeepAliveInterval + 1)),
 		})
 		if sendErr != nil {
@@ -340,7 +340,7 @@ func ClientControllerCurrencyPriceSubscribe() error {
 	r, sendErr := c.CurrencyPriceSubscribe(ctx, &pb.CurrencyPriceSubscribeReq{
 		CurrencyPairs: helpers.NodeCfg.CurrencyPairs,
 		NodeUuid:      helpers.NodeCfg.UUID.String(),
-		NodeAddr:      helpers.NodeCfg.NodeListenAddr,
+		NodeAddr:      helpers.NodeCfg.NodeAdvertiseAddr,
 		NodeStaleAt:   timestamppb.New(time.Now().Add(helpers.NodeCfg.KeepAliveInterval + 1)),
 	})
 	if sendErr != nil {
