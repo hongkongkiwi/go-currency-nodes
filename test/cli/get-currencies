@@ -5,8 +5,8 @@ if [ ! -f "$BASEDIR/../../build/cli" ]; then
   make cli
   cd "$BASEDIR"
 fi
-export NODE_REMOTE_ADDR="${NODE_REMOTE_ADDR:-"127.0.0.1:5051"}"
-echo "Connecting to node: $NODE_REMOTE_ADDR"
+export CLI_NODE_REMOTE_ADDR="${CLI_NODE_REMOTE_ADDR:-"127.0.0.1:5051"}"
+echo "Connecting to node: $CLI_NODE_REMOTE_ADDR"
 exec "$BASEDIR/../../build/cli" \
-  node --addr "$NODE_REMOTE_ADDR" \
+  node --addr "$CLI_NODE_REMOTE_ADDR" \
   currencies

@@ -9,6 +9,7 @@ import (
 	"sync"
 	"syscall"
 	"time"
+	"unicode/utf8"
 
 	"github.com/gofrs/uuid/v5"
 	helpers "github.com/hongkongkiwi/go-currency-nodes/internal/helpers"
@@ -112,6 +113,23 @@ func nodeStart() error {
 	// Wait for our important stuff
 	wg.Wait()
 	return nil
+}
+
+func ensureValidUtf8(s string) string {
+	if !utf8.ValidString(s) {
+		v := make([]rune, 0, len(s))
+		for i, r := range s {
+			if r == utf8.RuneError {
+				_, size := utf8.DecodeRuneInString(s[i:])
+				if size == 1 {
+					continue
+				}
+			}
+			v = append(v, r)
+		}
+		s = string(v)
+	}
+	return s
 }
 
 func main() {
@@ -220,14 +238,14 @@ func main() {
 					},
 				},
 				Action: func(cCtx *cli.Context) error {
-					helpers.NodeCfg.NodeListenAddr = cCtx.String("address")
-					helpers.NodeCfg.NodeAdvertiseAddr = cCtx.String("advertise")
-					helpers.NodeCfg.ControllerAddr = cCtx.String("controller")
-					helpers.NodeCfg.Name = cCtx.String("name")
+					helpers.NodeCfg.NodeListenAddr = ensureValidUtf8(cCtx.String("address"))
+					helpers.NodeCfg.NodeAdvertiseAddr = ensureValidUtf8(cCtx.String("advertise"))
+					helpers.NodeCfg.ControllerAddr = ensureValidUtf8(cCtx.String("controller"))
+					helpers.NodeCfg.Name = ensureValidUtf8(cCtx.String("name"))
 					helpers.NodeCfg.UpdatesMinFreq = cCtx.Duration("updates-min-freq")
 					helpers.NodeCfg.UpdatesMaxFreq = cCtx.Duration("updates-max-freq")
 					helpers.NodeCfg.UpdatesPercentChange = cCtx.Uint("updates-percent")
-					nodeUuid := strings.ToLower(cCtx.String("uuid"))
+					nodeUuid := strings.ToLower(ensureValidUtf8(cCtx.String("uuid")))
 					if nodeUuid == "" {
 						log.Printf("WARNING: we randomly generated UUID it is better to pass fixed one for this node")
 						helpers.NodeCfg.UUID = uuid.Must(uuid.NewV4())

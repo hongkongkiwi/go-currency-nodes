@@ -65,7 +65,7 @@ services:
       - 5052
     environment:
       - "NODE_LISTEN_ADDR=0.0.0.0:5052"
-      - "NODE_ADVERTISE_ADDR=currency-node1:5052"
+      - "NODE_ADVERTISE_ADDR=currency-node2:5052"
       - "NODE_CONTROLLER_ADDR=controller1:5060"
       - "NODE_UUID=58f1f65e-b536-4be0-89ea-894a57f7e2bf"
       - "NODE_PAUSE_UPDATES=true"
@@ -89,7 +89,7 @@ services:
       - 5053
     environment:
       - "NODE_LISTEN_ADDR=0.0.0.0:5053"
-      - "NODE_ADVERTISE_ADDR=currency-node1:5053"
+      - "NODE_ADVERTISE_ADDR=currency-node3:5053"
       - "NODE_CONTROLLER_ADDR=controller1:5060"
       - "NODE_UUID=1ed2ebd8-6fc9-46f7-a156-6b9d9bff4982"
       # This node is going to spew updates
@@ -97,7 +97,7 @@ services:
       # Generate an update minimum every 1s
       - "NODE_PRICEUPDATES_MIN_FREQ=1s"
       # Generate an update maximum every 5s
-      - "NODE_PRICEUPDATES_MAX_FREQ=5s"
+      - "NODE_PRICEUPDATES_MAX_FREQ=4s"
       # Change prices automatically 20% of old prices
       - "NODE_PRICEUPDATES_PERCENT=20"
       # Choose a selection of currency pairs (this node streams updates on these pairs)
