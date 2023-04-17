@@ -11,11 +11,12 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
+	pb "github.com/hongkongkiwi/go-currency-nodes/gen/pb"
 	helpers "github.com/hongkongkiwi/go-currency-nodes/internal/helpers"
 	nodeClient "github.com/hongkongkiwi/go-currency-nodes/internal/node_client"
 	nodePriceGen "github.com/hongkongkiwi/go-currency-nodes/internal/node_price_gen"
-	pb "github.com/hongkongkiwi/go-currency-nodes/pb"
 	"github.com/tebeka/atexit"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -24,6 +25,8 @@ import (
 )
 
 const NodeVersion = "0.0.2"
+
+var priceUpdatesChan chan map[string]*nodePriceGen.PriceCurrency
 
 func funcName() string {
 	pc, _, _, _ := runtime.Caller(1)
@@ -53,6 +56,19 @@ func (s *grpcNodeCommandsServer) NodeUUID(ctx context.Context, _ *emptypb.Empty)
 func (s *grpcNodeCommandsServer) NodeAppVersion(ctx context.Context, _ *emptypb.Empty) (*pb.NodeAppVersionReply, error) {
 	log.Printf("gRPC: %s", funcName())
 	return &pb.NodeAppVersionReply{NodeVersion: NodeVersion}, nil
+}
+
+// Send a manual price update to this node
+// rpc NodeManualPriceUpdate (NodeManualPriceUpdateReq) returns (google.protobuf.Empty) {}
+func (s *grpcNodeCommandsServer) NodeManualPriceUpdate(ctx context.Context, in *pb.NodeManualPriceUpdateReq) (*emptypb.Empty, error) {
+	log.Printf("gRPC: %s", funcName())
+	updatedPrices := make(map[string]*nodePriceGen.PriceCurrency)
+	updatedPrices[in.CurrencyPair] = &nodePriceGen.PriceCurrency{
+		Price:       in.Price,
+		GeneratedAt: time.Now(),
+	}
+	priceUpdatesChan <- updatedPrices
+	return &emptypb.Empty{}, nil
 }
 
 // Get this nodes status
@@ -143,8 +159,9 @@ func (s *grpcNodeEventsServer) CurrencyPriceUpdatedEvent(ctx context.Context, in
 }
 
 // Start our gRPC server
-func StartServer(wg *sync.WaitGroup) {
+func StartServer(wg *sync.WaitGroup, updatesChan chan map[string]*nodePriceGen.PriceCurrency) {
 	defer wg.Done()
+	priceUpdatesChan = updatesChan
 	// Create new store
 	var storeErr error
 	nodeClient.NodePriceStore, storeErr = helpers.NewMemoryCurrencyStore()

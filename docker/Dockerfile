@@ -36,4 +36,5 @@ RUN printf '#!/bin/sh -ux\nexec /app/'$APP_NAME' $@\n' > /app-entrypoint && \
 
 COPY --from=builder /app/build/$APP_NAME /app/$APP_NAME
 
-CMD ["/app-entrypoint"]
+ENTRYPOINT ["/app-entrypoint"]
+CMD ["start"]

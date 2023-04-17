@@ -11,7 +11,7 @@ import (
 	"runtime"
 	"time"
 
-	pb "github.com/hongkongkiwi/go-currency-nodes/pb" // imports as package "cli"
+	pb "github.com/hongkongkiwi/go-currency-nodes/gen/pb" // imports as package "cli"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
@@ -73,6 +73,23 @@ func ClientNodeAppVersion() error {
 		return fmt.Errorf("could not call gRPC NodeVersion: %v", err)
 	}
 	log.Printf("gRPC: Reply: %s: %s", funcName(), r.NodeVersion)
+	return nil
+}
+
+func ClientNodeManualPriceUpdate(currencyPair string, price float64) error {
+	c, ctx, cancel, connectErr := ClientConnect(NodeAddr)
+	if connectErr != nil {
+		return connectErr
+	}
+	defer cancel()
+	log.Printf("gRPC: Request: %s", funcName())
+	_, err := c.NodeManualPriceUpdate(ctx, &pb.NodeManualPriceUpdateReq{
+		CurrencyPair: currencyPair,
+		Price:        price,
+	})
+	if err != nil {
+		return fmt.Errorf("could not call gRPC NodeVersion: %v", err)
+	}
 	return nil
 }
 
@@ -140,40 +157,6 @@ func ClientNodeCurrencies() error {
 		return fmt.Errorf("could not call gRPC NodeCurrencies: %v", err)
 	}
 	log.Printf("gRPC: Reply: %s: %s", funcName(), r)
-	return nil
-}
-
-// rpc NodeControllerConnect(google.protobuf.Empty) returns (google.protobuf.Empty) {}
-func ClientNodeControllerConnect() error {
-	c, ctx, cancel, connectErr := ClientConnect(NodeAddr)
-	if connectErr != nil {
-		return connectErr
-	}
-	defer cancel()
-	log.Printf("gRPC: Request: %s", funcName())
-	// No interesting reply, ignore any data
-	_, err := c.NodeControllerConnect(ctx, &emptypb.Empty{})
-	if err != nil {
-		return fmt.Errorf("could not call gRPC NodeControllerConnect: %v", err)
-	}
-	log.Printf("gRPC: Reply: %s", funcName())
-	return nil
-}
-
-// rpc NodeControllerDisconnect(google.protobuf.Empty) returns (google.protobuf.Empty) {}
-func ClientNodeControllerDisconnect() error {
-	c, ctx, cancel, connectErr := ClientConnect(NodeAddr)
-	if connectErr != nil {
-		return connectErr
-	}
-	defer cancel()
-	log.Printf("gRPC: Request: %s", funcName())
-	// No interesting reply, ignore any data
-	_, err := c.NodeControllerDisconnect(ctx, &emptypb.Empty{})
-	if err != nil {
-		return fmt.Errorf("could not call gRPC NodeControllerDisconnect: %v", err)
-	}
-	log.Printf("gRPC: Reply: %s", funcName())
 	return nil
 }
 

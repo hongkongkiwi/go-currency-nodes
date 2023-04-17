@@ -1,4 +1,5 @@
-internal/pb/**
+docker/instancedata/**
+gen/**
 *.pb.go
 build/**
 .DS_Store

@@ -174,3 +174,7 @@ func (pg *PriceGeneratorApi) GenRandPricesForever(wg *sync.WaitGroup, minMs, max
 		}
 	}
 }
+
+func (pg *PriceGeneratorApi) ManualPriceUpdate(updatedPrices map[string]*PriceCurrency) {
+	pg.updatesChan <- updatedPrices
+}

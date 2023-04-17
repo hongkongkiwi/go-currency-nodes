@@ -1,0 +1,75 @@
+version: '3.7'
+services:
+  # In theory you can have multiple controllers as long as they share the db
+  # this is not tested
+  controller1:
+    container_name: currency-controller1
+    hostname: controller1
+    image: github.com/hongkongkiwi/go-currency-nodes/controller
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile
+      args:
+        - "APP_NAME=controller"
+    volumes:
+      # Persistant subscription and price data
+      - "./docker/instancedata/controller/db:/db:rw"
+    environment:
+      - "CONTROLLER_LISTEN_ADDR=0.0.0.0:5060"
+      - "CONTROLLER_DB_DIR=/db"
+      - "CONTROLLER_CURRENCY_PAIRS=USD_HKD,HKD_USD,USD_NZD,NZD_USD,BTC_HKD,HKD_BTC,BTC_USD,USD_BTC"
+    command: start
+  # This node receives updates but doesn't automatically generate them
+  node1:
+    container_name: currency-node1
+    image: github.com/hongkongkiwi/go-currency-nodes/node
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile
+      args:
+        - "APP_NAME=node"
+    environment:
+      - "NODE_LISTEN_ADDR=0.0.0.0:5051"
+      - "NODE_CONTROLLER_ADDR=controller1:5060"
+      - "NODE_UUID=b501cec4-36dd-4d7c-a1b9-5abc1d9290da"
+      - "NODE_PAUSE_UPDATES=true"
+      # Choose a selection of currency pairs
+      - "NODE_CURRENCY_PAIRS=USD_HKD,HKD_USD,USD_NZD,NZD_USD"
+      - "NODE_KEEPALIVE_INTERVAL=10s"
+    command: start
+  # This node receives updates but doesn't automatically generate them
+  node2:
+    container_name: currency-node2
+    image: github.com/hongkongkiwi/go-currency-nodes/node
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile
+      args:
+        - "APP_NAME=node"
+    environment:
+      - "NODE_LISTEN_ADDR=0.0.0.0:5052"
+      - "NODE_CONTROLLER_ADDR=controller1:5060"
+      - "NODE_UUID=58f1f65e-b536-4be0-89ea-894a57f7e2bf"
+      - "NODE_PAUSE_UPDATES=true"
+      # Choose a selection of currency pairs
+      - "NODE_CURRENCY_PAIRS=USD_NZD,NZD_USD,BTC_HKD,HKD_BTC,BTC_USD,USD_BTC"
+      - "NODE_KEEPALIVE_INTERVAL=10s"
+    command: start
+  # This node transmits updates automatically
+  node3:
+    container_name: currency-node3
+    image: github.com/hongkongkiwi/go-currency-nodes/node
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile
+      args:
+        - "APP_NAME=node"
+    environment:
+      - "NODE_LISTEN_ADDR=0.0.0.0:5053"
+      - "NODE_CONTROLLER_ADDR=controller1:5060"
+      - "NODE_UUID=1ed2ebd8-6fc9-46f7-a156-6b9d9bff4982"
+      - "NODE_PAUSE_UPDATES=false"
+      # Choose a selection of currency pairs (this node streams updates on these pairs)
+      - "NODE_CURRENCY_PAIRS=USD_HKD,HKD_USD,USD_NZD,NZD_USD,BTC_HKD,HKD_BTC,BTC_USD,USD_BTC"
+      - "NODE_KEEPALIVE_INTERVAL=10s"
+    command: start

@@ -34,6 +34,8 @@ service NodeCommands {
   rpc NodeAppVersion (google.protobuf.Empty) returns (NodeAppVersionReply) {}
   // Get this nodes UUID and name
   rpc NodeUUID (google.protobuf.Empty) returns (NodeUUIDReply) {}
+  // Send a manual price update to this node
+  rpc NodeManualPriceUpdate (NodeManualPriceUpdateReq) returns (google.protobuf.Empty) {}
   // Get this nodes full status
   rpc NodeStatus (google.protobuf.Empty) returns (NodeStatusReply) {}
   // Pause updates of currencies to controller
@@ -48,15 +50,21 @@ service NodeCommands {
   rpc NodeAppKill (google.protobuf.Empty) returns (google.protobuf.Empty) {}
 }
 
+// rpc NodeVersion
+message NodeAppVersionReply {
+  string node_version = 1;
+}
+
 // rpc NodeUUID
 message NodeUUIDReply {
   string node_uuid = 1;
   string node_name = 2;
 }
 
-// rpc NodeVersion
-message NodeAppVersionReply {
-  string node_version = 1;
+// rpc NodeManualPriceUpdate 
+message NodeManualPriceUpdateReq {
+  string currency_pair = 1;
+  double price = 2;
 }
 
 // rpc NodeCurrencies

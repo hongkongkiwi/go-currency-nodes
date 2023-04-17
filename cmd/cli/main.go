@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strconv"
 	"time"
 
 	cliClient "github.com/hongkongkiwi/go-currency-nodes/internal/cli_client"
@@ -16,35 +15,13 @@ const defaultNodeAddr = "127.0.0.1:5051"
 const defaultNodeRequestTimeout = uint64(time.Millisecond * 80)
 
 func cliVersion() error {
-	fmt.Println("version:", cli_version)
+	fmt.Println("cli version:", cli_version)
 	return nil
 }
 
-// Passed arguments override environment variables
-func fallbackStrEnv(argValue, envKey string) string {
-	if argValue == "" {
-		if envValue, envOk := os.LookupEnv(envKey); envOk && envValue != "" {
-			return envValue
-		}
-	}
-	return argValue
-}
-
-func fallbackUint64Env(argValue uint64, envKey string) uint64 {
-	if argValue == 0 {
-		if envValue, envOk := os.LookupEnv(envKey); envOk && envValue != "" {
-			i, err := strconv.ParseUint(envValue, 10, 64)
-			if err == nil {
-				return i
-			}
-		}
-	}
-	return argValue
-}
-
-func handleArgs(cCtx *cli.Context) {
-	cliClient.NodeAddr = fallbackStrEnv(cCtx.String("addr"), "NODE_REMOTE_ADDR")
-	cliClient.NodeRequestTimeout = fallbackUint64Env(cCtx.Uint64("timeout"), "NODE_REMOTE_TIMEOUT")
+func clientArgs(cCtx *cli.Context) {
+	cliClient.NodeAddr = cCtx.String("addr")
+	cliClient.NodeRequestTimeout = cCtx.Uint64("timeout")
 }
 
 func main() {
@@ -64,14 +41,16 @@ func main() {
 				Usage:   "options for node control",
 				Flags: []cli.Flag{
 					&cli.StringFlag{
-						Name:  "addr",
-						Value: defaultNodeAddr,
-						Usage: "address of the node to connect to [NODE_REMOTE_ADDR]",
+						Name:    "addr",
+						Value:   defaultNodeAddr,
+						EnvVars: []string{"NODE_REMOTE_ADDR"},
+						Usage:   "address of the node to connect to",
 					},
 					&cli.Uint64Flag{
-						Name:  "timeout",
-						Value: defaultNodeRequestTimeout,
-						Usage: "timeout for calls to node [NODE_REMOTE_TIMEOUT]",
+						Name:    "timeout",
+						Value:   defaultNodeRequestTimeout,
+						EnvVars: []string{"NODE_REMOTE_TIMEOUT"},
+						Usage:   "timeout for calls to node",
 					},
 				},
 				Subcommands: []*cli.Command{
@@ -80,7 +59,7 @@ func main() {
 						Aliases: []string{"u"},
 						Usage:   "show the node app uuid",
 						Action: func(cCtx *cli.Context) error {
-							handleArgs(cCtx)
+							clientArgs(cCtx)
 							return cliClient.ClientNodeUUID()
 						},
 					},
@@ -89,7 +68,7 @@ func main() {
 						Aliases: []string{"s"},
 						Usage:   "show the node status",
 						Action: func(cCtx *cli.Context) error {
-							handleArgs(cCtx)
+							clientArgs(cCtx)
 							return cliClient.ClientNodeStatus()
 						},
 					},
@@ -103,17 +82,8 @@ func main() {
 								Aliases: []string{"v"},
 								Usage:   "show the node app version",
 								Action: func(cCtx *cli.Context) error {
-									handleArgs(cCtx)
+									clientArgs(cCtx)
 									return cliClient.ClientNodeAppVersion()
-								},
-							},
-							{
-								Name:    "log",
-								Aliases: []string{"l"},
-								Usage:   "show the node app log",
-								Action: func(cCtx *cli.Context) error {
-									handleArgs(cCtx)
-									return cliClient.ClientNodeAppLog()
 								},
 							},
 							{
@@ -121,23 +91,45 @@ func main() {
 								Aliases: []string{"k"},
 								Usage:   "kill the node app",
 								Action: func(cCtx *cli.Context) error {
-									handleArgs(cCtx)
+									clientArgs(cCtx)
 									return cliClient.ClientNodeAppKill()
 								},
 							},
 						},
 					},
 					{
-						Name:    "updatestream",
+						Name:    "priceupdates",
 						Aliases: []string{"u"},
-						Usage:   "updates to controller",
+						Usage:   "price",
 						Subcommands: []*cli.Command{
+							{
+								Name:    "new",
+								Aliases: []string{"n"},
+								Flags: []cli.Flag{
+									&cli.StringFlag{
+										Name:     "currency-pair",
+										Aliases:  []string{"pair"},
+										Required: true,
+										Usage:    "currency pair to set (must be in nodes configured pairs)",
+									},
+									&cli.Float64Flag{
+										Name:     "price",
+										Required: true,
+										Usage:    "new price",
+									},
+								},
+								Usage: "manually send a price",
+								Action: func(cCtx *cli.Context) error {
+									clientArgs(cCtx)
+									return cliClient.ClientNodeManualPriceUpdate(cCtx.String("currency-pair"), cCtx.Float64("price"))
+								},
+							},
 							{
 								Name:    "pause",
 								Aliases: []string{"p"},
 								Usage:   "pause updating price updates to controller",
 								Action: func(cCtx *cli.Context) error {
-									handleArgs(cCtx)
+									clientArgs(cCtx)
 									return cliClient.ClientNodeUpdatesPause()
 								},
 							},
@@ -146,7 +138,7 @@ func main() {
 								Aliases: []string{"r"},
 								Usage:   "resume updating price updates to controller",
 								Action: func(cCtx *cli.Context) error {
-									handleArgs(cCtx)
+									clientArgs(cCtx)
 									return cliClient.ClientNodeUpdatesResume()
 								},
 							},
@@ -162,51 +154,8 @@ func main() {
 								Aliases: []string{"l"},
 								Usage:   "list all subscriptions (and known prices)",
 								Action: func(cCtx *cli.Context) error {
-									handleArgs(cCtx)
+									clientArgs(cCtx)
 									return cliClient.ClientNodeCurrencies()
-								},
-							},
-							{
-								Name:    "sync",
-								Aliases: []string{"s"},
-								Usage:   "sync the server subscriptions with our config file",
-								Action: func(cCtx *cli.Context) error {
-									handleArgs(cCtx)
-									return cliClient.ClientNodeCurrenciesRefreshCache()
-								},
-							},
-							{
-								Name:    "refresh",
-								Aliases: []string{"s"},
-								Usage:   "get the latest prices from server",
-								Action: func(cCtx *cli.Context) error {
-									handleArgs(cCtx)
-									return cliClient.ClientNodeCurrenciesRefreshCache()
-								},
-							},
-						},
-					},
-					{
-						Name:    "controller",
-						Aliases: []string{"c"},
-						Usage:   "options for node control",
-						Subcommands: []*cli.Command{
-							{
-								Name:    "connect",
-								Aliases: []string{"c"},
-								Usage:   "ask node to connect to controller",
-								Action: func(cCtx *cli.Context) error {
-									handleArgs(cCtx)
-									return cliClient.ClientNodeControllerConnect()
-								},
-							},
-							{
-								Name:    "disconnect",
-								Aliases: []string{"d"},
-								Usage:   "ask node to disconnect from controller",
-								Action: func(cCtx *cli.Context) error {
-									handleArgs(cCtx)
-									return cliClient.ClientNodeControllerDisconnect()
 								},
 							},
 						},

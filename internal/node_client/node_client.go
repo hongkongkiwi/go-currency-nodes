@@ -13,9 +13,9 @@ import (
 	"sync"
 	"time"
 
+	pb "github.com/hongkongkiwi/go-currency-nodes/gen/pb"
 	helpers "github.com/hongkongkiwi/go-currency-nodes/internal/helpers"
 	nodePriceGen "github.com/hongkongkiwi/go-currency-nodes/internal/node_price_gen"
-	pb "github.com/hongkongkiwi/go-currency-nodes/pb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
@@ -37,13 +37,12 @@ const debugName = "NodeClient"
 
 // Remove Controller Address to connect to
 const RequestTimeout uint64 = uint64(1000 * time.Millisecond)
-const keepAliveInterval = 10 * time.Second
 
 var keepAliveTicker *time.Ticker
 
 // Runs on a schedule and sends a keep alive to server with our address
 func KeepAliveTick(keepAliveStopChan chan bool) {
-	keepAliveTicker = time.NewTicker(keepAliveInterval)
+	keepAliveTicker = time.NewTicker(helpers.NodeCfg.KeepAliveInterval)
 	defer keepAliveTicker.Stop()
 	defer close(keepAliveStopChan)
 	for {
@@ -73,7 +72,7 @@ func ResetKeepAlive() error {
 	if keepAliveTicker == nil {
 		return fmt.Errorf("keep alive is already stopped")
 	}
-	keepAliveTicker.Reset(keepAliveInterval)
+	keepAliveTicker.Reset(helpers.NodeCfg.KeepAliveInterval)
 	return nil
 }
 
@@ -174,7 +173,7 @@ func ClientControllerVersion() error {
 	r, err := c.ControllerVersion(ctx, &pb.ControllerVersionReq{
 		NodeUuid:    helpers.NodeCfg.UUID.String(),
 		NodeAddr:    helpers.NodeCfg.NodeListenAddr,
-		NodeStaleAt: timestamppb.New(time.Now().Add(keepAliveInterval)),
+		NodeStaleAt: timestamppb.New(time.Now().Add(helpers.NodeCfg.KeepAliveInterval + 1)),
 	})
 	if err != nil {
 		return fmt.Errorf("%s->gRPC->Error: %s: %v", debugName, funcName(), err)
@@ -198,7 +197,7 @@ func ClientControllerKeepAlive() error {
 	_, sendErr := c.NodeKeepAlive(ctx, &pb.NodeKeepAliveReq{
 		NodeUuid:    helpers.NodeCfg.UUID.String(),
 		NodeAddr:    helpers.NodeCfg.NodeListenAddr,
-		NodeStaleAt: timestamppb.New(time.Now().Add(keepAliveInterval)),
+		NodeStaleAt: timestamppb.New(time.Now().Add(helpers.NodeCfg.KeepAliveInterval + 1)),
 	})
 	if sendErr != nil {
 		return fmt.Errorf("%s->gRPC->Error: %s: %v", debugName, funcName(), sendErr)
@@ -226,7 +225,7 @@ func ClientControllerCurrencyPrice() error {
 		CurrencyPairs: helpers.NodeCfg.CurrencyPairs,
 		NodeUuid:      helpers.NodeCfg.UUID.String(),
 		NodeAddr:      helpers.NodeCfg.NodeListenAddr,
-		NodeStaleAt:   timestamppb.New(time.Now().Add(keepAliveInterval)),
+		NodeStaleAt:   timestamppb.New(time.Now().Add(helpers.NodeCfg.KeepAliveInterval + 1)),
 	})
 	if sendErr != nil {
 		return fmt.Errorf("%s->gRPC->Error: %s: %v", debugName, funcName(), sendErr)
@@ -272,7 +271,7 @@ func ClientControllerCurrencyPriceUpdateAll() error {
 			CurrencyItems: currencyItems,
 			NodeUuid:      helpers.NodeCfg.UUID.String(),
 			NodeAddr:      helpers.NodeCfg.NodeListenAddr,
-			NodeStaleAt:   timestamppb.New(time.Now().Add(keepAliveInterval)),
+			NodeStaleAt:   timestamppb.New(time.Now().Add(helpers.NodeCfg.KeepAliveInterval + 1)),
 		})
 		if sendErr != nil {
 			return fmt.Errorf("%s->gRPC->Error: %s: %v", debugName, funcName(), sendErr)
@@ -311,7 +310,7 @@ func ClientControllerCurrencyPriceUpdate(currencyPairs []string) error {
 			CurrencyItems: currencyItems,
 			NodeUuid:      helpers.NodeCfg.UUID.String(),
 			NodeAddr:      helpers.NodeCfg.NodeListenAddr,
-			NodeStaleAt:   timestamppb.New(time.Now().Add(keepAliveInterval)),
+			NodeStaleAt:   timestamppb.New(time.Now().Add(helpers.NodeCfg.KeepAliveInterval + 1)),
 		})
 		if sendErr != nil {
 			return fmt.Errorf("%s->gRPC->Error: %s: %v", debugName, funcName(), sendErr)
@@ -342,7 +341,7 @@ func ClientControllerCurrencyPriceSubscribe() error {
 		CurrencyPairs: helpers.NodeCfg.CurrencyPairs,
 		NodeUuid:      helpers.NodeCfg.UUID.String(),
 		NodeAddr:      helpers.NodeCfg.NodeListenAddr,
-		NodeStaleAt:   timestamppb.New(time.Now().Add(keepAliveInterval)),
+		NodeStaleAt:   timestamppb.New(time.Now().Add(helpers.NodeCfg.KeepAliveInterval + 1)),
 	})
 	if sendErr != nil {
 		return fmt.Errorf("%s->gRPC->Error: %s: %v", debugName, funcName(), sendErr)

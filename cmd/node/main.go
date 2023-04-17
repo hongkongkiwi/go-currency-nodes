@@ -5,8 +5,10 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/gofrs/uuid/v5"
 	helpers "github.com/hongkongkiwi/go-currency-nodes/internal/helpers"
@@ -70,7 +72,7 @@ func nodeStart() error {
 	go priceGen.GenRandPricesForever(&wg, 1000, 5000, stopChan)
 	// Start our command server
 	wg.Add(1)
-	go nodeServer.StartServer(&wg)
+	go nodeServer.StartServer(&wg, updatesChan)
 	// Subscribe to all currency pairs on server
 	go func() {
 		var err error
@@ -148,6 +150,13 @@ func main() {
 						Usage:   "set name for this node",
 						EnvVars: []string{"NODE_NAME"},
 					},
+					&cli.DurationFlag{
+						Name:    "keepalive",
+						Aliases: []string{"keepalive-interval"},
+						Value:   time.Duration(10 * time.Second),
+						Usage:   "set keepalive interval for this node",
+						EnvVars: []string{"NODE_KEEPALIVE_INTERVAL"},
+					},
 					&cli.BoolFlag{
 						Name:    "start_paused",
 						Value:   false,
@@ -181,12 +190,12 @@ func main() {
 					helpers.NodeCfg.NodeListenAddr = cCtx.String("address")
 					helpers.NodeCfg.ControllerAddr = cCtx.String("controller")
 					helpers.NodeCfg.Name = cCtx.String("name")
-					nodeUuid := cCtx.String("uuid")
+					nodeUuid := strings.ToLower(cCtx.String("uuid"))
 					if nodeUuid == "" {
 						log.Printf("WARNING: we randomly generated UUID it is better to pass fixed one for this node")
 						helpers.NodeCfg.UUID = uuid.Must(uuid.NewV4())
 					} else {
-						helpers.NodeCfg.UUID = uuid.FromStringOrNil(cCtx.String("uuid"))
+						helpers.NodeCfg.UUID = uuid.FromStringOrNil(nodeUuid)
 						if helpers.NodeCfg.UUID == uuid.Nil {
 							atexit.Fatalf("invalid uuid format %s", helpers.NodeCfg.UUID)
 						}
@@ -197,12 +206,18 @@ func main() {
 					helpers.NodeCfg.CurrencyPairs = cCtx.StringSlice("currencies")
 					helpers.NodeCfg.VerboseLog = cCtx.Bool("verbose")
 					nodePriceGen.UpdatesPaused = cCtx.Bool("start_paused")
+					helpers.NodeCfg.KeepAliveInterval = cCtx.Duration("keepalive")
+					if helpers.NodeCfg.KeepAliveInterval < 1 {
+						return fmt.Errorf("keepalive interval must be greater than 0")
+					}
 					log.Printf("config node uuid: %s", helpers.NodeCfg.UUID)
 					log.Printf("config node name: %s", helpers.NodeCfg.Name)
 					log.Printf("config node currency pairs: %s", helpers.NodeCfg.CurrencyPairs)
 					log.Printf("config node address: %s", helpers.NodeCfg.NodeListenAddr)
+					log.Printf("config keepalive interval: %v", helpers.NodeCfg.KeepAliveInterval)
 					log.Printf("config controller address: %s", helpers.NodeCfg.ControllerAddr)
 					return nodeStart()
+
 				},
 			},
 		},

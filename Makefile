@@ -7,7 +7,7 @@ BUILD_DIR ?= build
 DOCKER_TAG := github.com/hongkongkiwi/go-currency-nodes
 GO_PKG := github.com/hongkongkiwi/go-currency-nodes
 PROTO_INPUT_DIR := proto
-PROTO_OUTPUT_DIR := pb
+PROTO_OUTPUT_DIR := gen/pb
 
 all: gen build
 
