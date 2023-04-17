@@ -5,8 +5,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"strconv"
-	"strings"
 	"sync"
 	"syscall"
 
@@ -53,7 +51,7 @@ func multiSignalHandler(signal os.Signal) {
 }
 
 func gracefulExitHandler() {
-	nodeServer.StopServer()
+	go nodeServer.StopServer()
 	nodeClient.StopPriceUpdates()
 	log.Println("Exiting ...")
 }
@@ -63,25 +61,38 @@ func nodeStart() error {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan)
 	atexit.Register(gracefulExitHandler)
-	wg.Add(3)
 
 	updatesChan := make(chan map[string]*nodePriceGen.PriceCurrency)
 	stopChan = make(chan bool)
 	priceGen, _ = nodePriceGen.NewPriceGeneratorApi(helpers.NodeCfg.CurrencyPairs, updatesChan)
 	// Start generating prices from price API
+	wg.Add(1)
 	go priceGen.GenRandPricesForever(&wg, 1000, 5000, stopChan)
 	// Start our command server
+	wg.Add(1)
 	go nodeServer.StartServer(&wg)
 	// Subscribe to all currency pairs on server
 	go func() {
+		var err error
+		// Just for fun grab our controller version
+		if err = nodeClient.ClientControllerVersion(); err != nil {
+			log.Printf("%v", err)
+		}
 		// Subscribe to updates of our currency pairs
-		nodeClient.ClientControllerCurrencyPriceSubscribe()
+		if err = nodeClient.ClientControllerCurrencyPriceSubscribe(); err != nil {
+			log.Printf("%v", err)
+		}
 		// Pull current prices manually at startup
-		nodeClient.ClientControllerCurrencyPrice()
+		// if err = nodeClient.ClientControllerCurrencyPrice(); err != nil {
+		// 	log.Printf("%v", err)
+		// }
 		// Start listening for price updates from our API
-		nodeClient.StartPriceUpdates(&wg, updatesChan, stopChan)
+		wg.Add(1)
+		if err = nodeClient.StartPriceUpdates(&wg, updatesChan, stopChan); err != nil {
+			log.Printf("%v", err)
+		}
 	}()
-	go nodeClient.KeepAliveTick()
+	go nodeClient.KeepAliveTick(stopChan)
 	// Handle exit signals
 	go func() {
 		for {
@@ -92,27 +103,6 @@ func nodeStart() error {
 	// Wait for our important stuff
 	wg.Wait()
 	return nil
-}
-
-func fallbackEnv(argValue, envKey string) string {
-	if argValue == "" {
-		if envValue, envOk := os.LookupEnv(envKey); envOk && envValue != "" {
-			return envValue
-		}
-	}
-	return argValue
-}
-
-func fallbackEnvBool(argValue bool, envKey string) bool {
-	if !argValue {
-		if envValue, envOk := os.LookupEnv(envKey); envOk && envValue != "" {
-			boolValue, err := strconv.ParseBool(envValue)
-			if err == nil {
-				return boolValue
-			}
-		}
-	}
-	return argValue
 }
 
 func main() {
@@ -132,50 +122,86 @@ func main() {
 				Usage:   "starts the server",
 				Flags: []cli.Flag{
 					&cli.StringFlag{
-						Name:  "listenAddr",
-						Value: "127.0.0.1:5051",
-						Usage: "listen address for control commands (NODE_LISTEN_ADDR)",
+						Name:    "address",
+						Aliases: []string{"listen_address"},
+						Value:   "127.0.0.1:5051",
+						Usage:   "set listen address for this node",
+						EnvVars: []string{"NODE_LISTEN_ADDR"},
 					},
 					&cli.StringFlag{
-						Name:  "controllerAddr",
-						Value: "127.0.0.1:5052",
-						Usage: "controller connect addrss (NODE_CONTROLLER_ADDR)",
+						Name:    "controller",
+						Value:   "127.0.0.1:5052",
+						Usage:   "set controller address",
+						EnvVars: []string{"NODE_CONTROLLER_ADDR"},
 					},
 					&cli.StringFlag{
-						Name:  "uuid",
-						Value: "",
-						Usage: "uuid for this node (NODE_UUID)",
+						Name:    "uuid",
+						Aliases: []string{"node_uuid"},
+						Value:   "",
+						Usage:   "set uuid for this node (will generate random)",
+						EnvVars: []string{"NODE_UUID"},
 					},
 					&cli.StringFlag{
-						Name:  "name",
-						Value: "",
-						Usage: "name for this node (NODE_NAME)",
+						Name:    "name",
+						Aliases: []string{"node_name"},
+						Value:   "",
+						Usage:   "set name for this node",
+						EnvVars: []string{"NODE_NAME"},
 					},
 					&cli.BoolFlag{
-						Name:  "verbose",
-						Value: false,
-						Usage: "whether to turn on verbose logging for this node (NODE_LOG_VERBOSE)",
+						Name:    "start_paused",
+						Value:   false,
+						Usage:   "do not generate price updates on this node, just listen",
+						EnvVars: []string{"NODE_PAUSE_UPDATES"},
 					},
-					&cli.StringFlag{
-						Name:  "currencyPairs",
-						Value: "USD_HKD,HKD_USD,USD_NZD,NZD_USD",
-						Usage: "currencyPairs for this node (NODE_CURRENCY_PAIRS)",
+					&cli.BoolFlag{
+						Name:    "verbose",
+						Value:   false,
+						Usage:   "turn on verbose logging for this node",
+						EnvVars: []string{"NODE_LOG_VERBOSE"},
+					},
+					&cli.StringSliceFlag{
+						Name:    "currencies",
+						Aliases: []string{"currency_pairs"},
+						Value: cli.NewStringSlice(
+							"USD_HKD",
+							"HKD_USD",
+							"USD_NZD",
+							"NZD_USD",
+							"BTC_HKD",
+							"HKD_BTC",
+							"BTC_USD",
+							"USD_BTC",
+						),
+						Usage:   "set currency pairs for this node",
+						EnvVars: []string{"NODE_CURRENCY_PAIRS"},
 					},
 				},
 				Action: func(cCtx *cli.Context) error {
-					helpers.NodeCfg.NodeListenAddr = fallbackEnv(cCtx.String("listenAddr"), "NODE_LISTEN_ADDR")
-					helpers.NodeCfg.ControllerAddr = fallbackEnv(cCtx.String("controllerAddr"), "NODE_CONTROLLER_ADDR")
-					helpers.NodeCfg.Name = fallbackEnv(cCtx.String("name"), "NODE_NAME")
-					nodeUuid := fallbackEnv(cCtx.String("nodeUuid"), "NODE_UUID")
-					helpers.NodeCfg.CurrencyPairs = strings.Split(fallbackEnv(cCtx.String("currencyPairs"), "NODE_CURRENCY_PAIRS"), ",")
-					if nodeUuid != "" {
-						helpers.NodeCfg.UUID = uuid.Must(uuid.FromString(nodeUuid))
+					helpers.NodeCfg.NodeListenAddr = cCtx.String("address")
+					helpers.NodeCfg.ControllerAddr = cCtx.String("controller")
+					helpers.NodeCfg.Name = cCtx.String("name")
+					nodeUuid := cCtx.String("uuid")
+					if nodeUuid == "" {
+						log.Printf("WARNING: we randomly generated UUID it is better to pass fixed one for this node")
+						helpers.NodeCfg.UUID = uuid.Must(uuid.NewV4())
 					} else {
-						atexit.Fatal("no --nodeUuid or env NODE_UUID!")
+						helpers.NodeCfg.UUID = uuid.FromStringOrNil(cCtx.String("uuid"))
+						if helpers.NodeCfg.UUID == uuid.Nil {
+							atexit.Fatalf("invalid uuid format %s", helpers.NodeCfg.UUID)
+						}
 					}
-					helpers.NodeCfg.VerboseLog = fallbackEnvBool(cCtx.Bool("verbose"), "NODE_LOG_VERBOSE")
-					log.Printf("node uuid: %s", helpers.NodeCfg.UUID)
-					log.Printf("node currency pairs: %s", helpers.NodeCfg.CurrencyPairs)
+					if helpers.NodeCfg.Name == "" {
+						helpers.NodeCfg.Name = fmt.Sprintf("node (%s)", helpers.NodeCfg.UUID.String())
+					}
+					helpers.NodeCfg.CurrencyPairs = cCtx.StringSlice("currencies")
+					helpers.NodeCfg.VerboseLog = cCtx.Bool("verbose")
+					nodePriceGen.UpdatesPaused = cCtx.Bool("start_paused")
+					log.Printf("config node uuid: %s", helpers.NodeCfg.UUID)
+					log.Printf("config node name: %s", helpers.NodeCfg.Name)
+					log.Printf("config node currency pairs: %s", helpers.NodeCfg.CurrencyPairs)
+					log.Printf("config node address: %s", helpers.NodeCfg.NodeListenAddr)
+					log.Printf("config controller address: %s", helpers.NodeCfg.ControllerAddr)
 					return nodeStart()
 				},
 			},

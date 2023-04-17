@@ -13,13 +13,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bay0/kvs"
 	helpers "github.com/hongkongkiwi/go-currency-nodes/internal/helpers"
 	nodePriceGen "github.com/hongkongkiwi/go-currency-nodes/internal/node_price_gen"
 	pb "github.com/hongkongkiwi/go-currency-nodes/pb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -29,25 +29,22 @@ const (
 )
 
 var conn *grpc.ClientConn
-var client pb.ControllerCommandsClient
 var stopPriceUpdatesChan chan bool
-var NodePriceStore *kvs.KeyValueStore
+var NodePriceStore *helpers.CurrencyStore
 var NodePriceUpdatesState int = PriceUpdatesReady
 
 const debugName = "NodeClient"
 
 // Remove Controller Address to connect to
-var RequestTimeout uint64
+const RequestTimeout uint64 = uint64(1000 * time.Millisecond)
+const keepAliveInterval = 10 * time.Second
 
-var keepAliveInterval = 10 * time.Second
 var keepAliveTicker *time.Ticker
-var keepAliveStopChan chan bool
 
 // Runs on a schedule and sends a keep alive to server with our address
-func KeepAliveTick() {
+func KeepAliveTick(keepAliveStopChan chan bool) {
 	keepAliveTicker = time.NewTicker(keepAliveInterval)
 	defer keepAliveTicker.Stop()
-	keepAliveStopChan = make(chan bool)
 	defer close(keepAliveStopChan)
 	for {
 		select {
@@ -58,8 +55,11 @@ func KeepAliveTick() {
 		// Keep alive tick
 		case <-keepAliveTicker.C:
 			// Only send a keep alive tick if we are not shutdown
-			if ClientConnectivity() != connectivity.Shutdown {
-				ClientControllerKeepAlive()
+			if connectState, _ := ClientConnectivity(); connectState != connectivity.Shutdown {
+				err := ClientControllerKeepAlive()
+				if err != nil {
+					log.Printf("%v", err)
+				}
 			}
 		}
 	}
@@ -101,33 +101,27 @@ func funcName() string {
 // 	return ctx
 // }
 
-func ClientConnectivity() connectivity.State {
-	return conn.GetState()
+func ClientConnectivity() (connectivity.State, error) {
+	if conn == nil {
+		return connectivity.Shutdown, fmt.Errorf("cannot get connectivity.State on nil connection")
+	}
+	return conn.GetState(), nil
 }
 
-func newClientConnection() (*pb.ControllerCommandsClient, error) {
+func newConnection() error {
 	// Set up a connection to the server.
 	var err error
 	if conn == nil {
-		conn, err = grpc.Dial(helpers.NodeCfg.ControllerAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-		if err != nil {
-			return nil, err
+		if conn, err = grpc.Dial(helpers.NodeCfg.ControllerAddr, grpc.WithTransportCredentials(insecure.NewCredentials())); err != nil {
+			return err
 		}
 	}
-	if client == nil {
-		client = pb.NewControllerCommandsClient(conn)
-	}
-	return &client, nil
+	return nil
 }
 
 func StartPriceUpdates(wg *sync.WaitGroup, updatesChan <-chan map[string]*nodePriceGen.PriceCurrency, stopChan chan bool) error {
 	defer wg.Done()
 	stopPriceUpdatesChan = stopChan
-	log.Println("Starting Receiving Price Updates")
-	_, err := newClientConnection()
-	if err != nil {
-		return err
-	}
 	// Wait for Currency updates
 	for {
 		select {
@@ -149,7 +143,10 @@ func StartPriceUpdates(wg *sync.WaitGroup, updatesChan <-chan map[string]*nodePr
 				i++
 			}
 			// Send all these pairs as a price update
-			ClientControllerCurrencyPriceUpdate(currencyPairs)
+			err := ClientControllerCurrencyPriceUpdate(currencyPairs)
+			if err != nil {
+				log.Printf("%v", err)
+			}
 			// for pair, priceCurrency := range priceUpdate {
 			// 	log.Printf("Price %s Update: %.2f\n", pair, priceCurrency.Price)
 			// }
@@ -165,15 +162,16 @@ func StopPriceUpdates() {
 // Manually get the price of one or more currencies
 // rpc ControllerVersion (google.protobuf.Empty) returns (ControllerVersionReply) {}
 func ClientControllerVersion() error {
-	c, err := newClientConnection()
-	if err != nil {
-		return err
+	connectErr := newConnection()
+	if connectErr != nil {
+		return connectErr
 	}
 	log.Printf("%s->gRPC->Request: %s", debugName, funcName())
+	ResetKeepAlive()
+	c := pb.NewControllerCommandsClient(conn)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(RequestTimeout))
 	defer cancel()
-	ResetKeepAlive()
-	r, err := (*c).ControllerVersion(ctx, &pb.ControllerVersionReq{
+	r, err := c.ControllerVersion(ctx, &pb.ControllerVersionReq{
 		NodeUuid:    helpers.NodeCfg.UUID.String(),
 		NodeAddr:    helpers.NodeCfg.NodeListenAddr,
 		NodeStaleAt: timestamppb.New(time.Now().Add(keepAliveInterval)),
@@ -188,15 +186,16 @@ func ClientControllerVersion() error {
 // Sent by node at a regular interval
 // rpc NodeKeepAlive (NodeKeepAliveReq) returns (google.protobuf.Empty) {}
 func ClientControllerKeepAlive() error {
-	c, connectErr := newClientConnection()
+	connectErr := newConnection()
 	if connectErr != nil {
 		return connectErr
 	}
 	log.Printf("%s->gRPC->Request: %s", debugName, funcName())
+	ResetKeepAlive()
+	c := pb.NewControllerCommandsClient(conn)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(RequestTimeout))
 	defer cancel()
-	ResetKeepAlive()
-	_, sendErr := (*c).NodeKeepAlive(ctx, &pb.NodeKeepAliveReq{
+	_, sendErr := c.NodeKeepAlive(ctx, &pb.NodeKeepAliveReq{
 		NodeUuid:    helpers.NodeCfg.UUID.String(),
 		NodeAddr:    helpers.NodeCfg.NodeListenAddr,
 		NodeStaleAt: timestamppb.New(time.Now().Add(keepAliveInterval)),
@@ -211,18 +210,19 @@ func ClientControllerKeepAlive() error {
 // Manually get the price of one or more currencies this is basically polling
 // rpc CurrencyPrice (CurrencyPriceReq) returns (CurrencyPriceReply) {}
 func ClientControllerCurrencyPrice() error {
-	c, connectErr := newClientConnection()
+	connectErr := newConnection()
 	if connectErr != nil {
 		return connectErr
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(RequestTimeout))
-	defer cancel()
 	if len(helpers.NodeCfg.CurrencyPairs) == 0 {
 		return nil
 	}
 	log.Printf("%s->gRPC->Request: %s (%s)", debugName, funcName(), helpers.NodeCfg.CurrencyPairs)
 	ResetKeepAlive()
-	r, sendErr := (*c).CurrencyPrice(ctx, &pb.CurrencyPriceReq{
+	c := pb.NewControllerCommandsClient(conn)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(RequestTimeout))
+	defer cancel()
+	r, sendErr := c.CurrencyPrice(ctx, &pb.CurrencyPriceReq{
 		CurrencyPairs: helpers.NodeCfg.CurrencyPairs,
 		NodeUuid:      helpers.NodeCfg.UUID.String(),
 		NodeAddr:      helpers.NodeCfg.NodeListenAddr,
@@ -242,13 +242,10 @@ func ClientControllerCurrencyPrice() error {
 // Update the price of one or more currenices(normally sent 1 at a time but can be batched)
 // rpc CurrencyPriceUpdate (CurrencyPriceUpdateReq) returns (CurrencyPriceUpdateReply) {}
 func ClientControllerCurrencyPriceUpdateAll() error {
-	c, connectErr := newClientConnection()
+	connectErr := newConnection()
 	if connectErr != nil {
 		return connectErr
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(RequestTimeout))
-	defer cancel()
-
 	currencyPairs, _ := NodePriceStore.Keys()
 	if len(currencyPairs) == 0 {
 		return nil
@@ -256,9 +253,7 @@ func ClientControllerCurrencyPriceUpdateAll() error {
 	var currencyItems []*pb.CurrencyItem
 	// Send all our local prices to controller
 	for _, currencyPair := range currencyPairs {
-		val, _ := NodePriceStore.Get(currencyPair)
-		currencyStoreItem, _ := val.(*helpers.CurrencyStoreItem)
-		if currencyStoreItem != nil {
+		if currencyStoreItem, _ := NodePriceStore.Get(currencyPair); currencyStoreItem != nil {
 			protoCurrencyItem := &pb.CurrencyItem{
 				CurrencyPair: currencyPair,
 				Price:        currencyStoreItem.Price,
@@ -270,7 +265,10 @@ func ClientControllerCurrencyPriceUpdateAll() error {
 	if len(currencyItems) > 0 {
 		log.Printf("%s->gRPC->Request: %s (%s)", debugName, funcName(), currencyPairs)
 		ResetKeepAlive()
-		r, sendErr := (*c).CurrencyPriceUpdate(ctx, &pb.CurrencyPriceUpdateReq{
+		c := pb.NewControllerCommandsClient(conn)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(RequestTimeout))
+		defer cancel()
+		r, sendErr := c.CurrencyPriceUpdate(ctx, &pb.CurrencyPriceUpdateReq{
 			CurrencyItems: currencyItems,
 			NodeUuid:      helpers.NodeCfg.UUID.String(),
 			NodeAddr:      helpers.NodeCfg.NodeListenAddr,
@@ -287,19 +285,14 @@ func ClientControllerCurrencyPriceUpdateAll() error {
 // Update the price of one or more currenices(normally sent 1 at a time but can be batched)
 // rpc CurrencyPriceUpdate (CurrencyPriceUpdateReq) returns (CurrencyPriceUpdateReply) {}
 func ClientControllerCurrencyPriceUpdate(currencyPairs []string) error {
-	c, connectErr := newClientConnection()
+	connectErr := newConnection()
 	if connectErr != nil {
 		return connectErr
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(RequestTimeout))
-	defer cancel()
-
 	var currencyItems []*pb.CurrencyItem
 	// Send all specified currency pair prices to controller
 	for _, currencyPair := range currencyPairs {
-		val, _ := NodePriceStore.Get(currencyPair)
-		currencyStoreItem, _ := val.(*helpers.CurrencyStoreItem)
-		if currencyStoreItem != nil {
+		if currencyStoreItem, _ := NodePriceStore.Get(currencyPair); currencyStoreItem != nil {
 			protoCurrencyItem := &pb.CurrencyItem{
 				CurrencyPair: currencyPair,
 				Price:        currencyStoreItem.Price,
@@ -311,7 +304,10 @@ func ClientControllerCurrencyPriceUpdate(currencyPairs []string) error {
 	if len(currencyItems) > 0 {
 		log.Printf("%s->gRPC->Request: %s (%s)", debugName, funcName(), currencyPairs)
 		ResetKeepAlive()
-		r, sendErr := (*c).CurrencyPriceUpdate(ctx, &pb.CurrencyPriceUpdateReq{
+		c := pb.NewControllerCommandsClient(conn)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(RequestTimeout))
+		defer cancel()
+		r, sendErr := c.CurrencyPriceUpdate(ctx, &pb.CurrencyPriceUpdateReq{
 			CurrencyItems: currencyItems,
 			NodeUuid:      helpers.NodeCfg.UUID.String(),
 			NodeAddr:      helpers.NodeCfg.NodeListenAddr,
@@ -328,19 +324,21 @@ func ClientControllerCurrencyPriceUpdate(currencyPairs []string) error {
 // Subscribe to currency updates
 // rpc CurrencyPriceSubscribe (CurrencyPriceSubscribeReq) returns (CurrencySubscribeReply) {}
 func ClientControllerCurrencyPriceSubscribe() error {
-	c, connectErr := newClientConnection()
+	connectErr := newConnection()
 	if connectErr != nil {
 		return connectErr
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(RequestTimeout))
-	defer cancel()
 
 	if len(helpers.NodeCfg.CurrencyPairs) == 0 {
 		return nil
 	}
 	log.Printf("%s->gRPC->Request: %s (%s)", debugName, funcName(), helpers.NodeCfg.CurrencyPairs)
 	ResetKeepAlive()
-	r, sendErr := (*c).CurrencyPriceSubscribe(ctx, &pb.CurrencyPriceSubscribeReq{
+
+	c := pb.NewControllerCommandsClient(conn)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(RequestTimeout))
+	defer cancel()
+	r, sendErr := c.CurrencyPriceSubscribe(ctx, &pb.CurrencyPriceSubscribeReq{
 		CurrencyPairs: helpers.NodeCfg.CurrencyPairs,
 		NodeUuid:      helpers.NodeCfg.UUID.String(),
 		NodeAddr:      helpers.NodeCfg.NodeListenAddr,
@@ -349,6 +347,6 @@ func ClientControllerCurrencyPriceSubscribe() error {
 	if sendErr != nil {
 		return fmt.Errorf("%s->gRPC->Error: %s: %v", debugName, funcName(), sendErr)
 	}
-	log.Printf("%s->gRPC->Reply: %s: %s", debugName, funcName(), r.CurrencyPairs)
+	log.Printf("%s->gRPC->Reply: %s\n%s\n", debugName, funcName(), protojson.Format(r))
 	return nil
 }

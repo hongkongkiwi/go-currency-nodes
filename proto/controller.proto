@@ -59,7 +59,7 @@ message CurrencyPriceSubscribeReq {
 }
 
 message CurrencyPriceSubscribeReply {
-  repeated string currency_pairs = 1;
+  repeated CurrencyItem currency_items = 1;
   string node_uuid = 2; // UUID associated with this node
   string node_addr = 3; // Address that we can send currency updates to
   google.protobuf.Timestamp node_stale_at = 4; // When to consider this node stale

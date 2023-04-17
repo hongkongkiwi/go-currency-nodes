@@ -12,9 +12,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/bay0/kvs"
 	helpers "github.com/hongkongkiwi/go-currency-nodes/internal/helpers"
 	nodeClient "github.com/hongkongkiwi/go-currency-nodes/internal/node_client"
+	nodePriceGen "github.com/hongkongkiwi/go-currency-nodes/internal/node_price_gen"
 	pb "github.com/hongkongkiwi/go-currency-nodes/pb"
 	"github.com/tebeka/atexit"
 	"google.golang.org/grpc"
@@ -62,13 +62,11 @@ func (s *grpcNodeCommandsServer) NodeStatus(ctx context.Context, _ *emptypb.Empt
 	currencyPairs := helpers.NodeCfg.CurrencyPairs
 	currencyItems := make([]*pb.CurrencyItem, len(currencyPairs))
 	for i, key := range currencyPairs {
-		val, _ := nodeClient.NodePriceStore.Get(key)
-		if val != nil {
-			priceStore, _ := val.(*helpers.CurrencyStoreItem)
+		if priceItem, _ := nodeClient.NodePriceStore.Get(key); priceItem != nil {
 			currencyItems[i] = &pb.CurrencyItem{
 				CurrencyPair: key,
-				Price:        priceStore.Price,
-				PriceValidAt: timestamppb.New(priceStore.ValidAt),
+				Price:        priceItem.Price,
+				PriceValidAt: timestamppb.New(priceItem.ValidAt),
 			}
 		} else {
 			currencyItems[i] = &pb.CurrencyItem{
@@ -78,12 +76,12 @@ func (s *grpcNodeCommandsServer) NodeStatus(ctx context.Context, _ *emptypb.Empt
 	}
 
 	return &pb.NodeStatusReply{
-		NodeUuid:               helpers.NodeCfg.UUID.String(),
-		NodeName:               helpers.NodeCfg.Name,
-		NodeVersion:            NodeVersion,
-		NodeUpdatesStreamState: pb.NodeStatusReply_NodeStreamState(nodeClient.NodePriceUpdatesState),
-		ControllerServer:       helpers.NodeCfg.ControllerAddr,
-		CurrencyItems:          currencyItems,
+		NodeUuid:          helpers.NodeCfg.UUID.String(),
+		NodeName:          helpers.NodeCfg.Name,
+		NodeVersion:       NodeVersion,
+		NodeUpdatesPaused: nodePriceGen.UpdatesPaused,
+		ControllerServer:  helpers.NodeCfg.ControllerAddr,
+		CurrencyItems:     currencyItems,
 		// ConnectionState: ,
 		// CurrencyItems: ,
 	}, nil
@@ -93,7 +91,7 @@ func (s *grpcNodeCommandsServer) NodeStatus(ctx context.Context, _ *emptypb.Empt
 // rpc NodeCurrenciesPriceEventsPause (google.protobuf.Empty) returns (google.protobuf.Empty) {}
 func (s *grpcNodeCommandsServer) NodeCurrenciesPriceEventsPause(ctx context.Context, _ *emptypb.Empty) (*emptypb.Empty, error) {
 	log.Printf("gRPC: %s", funcName())
-	nodeClient.NodePriceUpdatesState = nodeClient.PriceUpdatesPause
+	nodePriceGen.PauseUpdates()
 	return &emptypb.Empty{}, nil
 }
 
@@ -101,7 +99,7 @@ func (s *grpcNodeCommandsServer) NodeCurrenciesPriceEventsPause(ctx context.Cont
 // rpc NodeCurrenciesPriceEventsResume (google.protobuf.Empty) returns (google.protobuf.Empty) {}
 func (s *grpcNodeCommandsServer) NodeCurrenciesPriceEventsResume(ctx context.Context, _ *emptypb.Empty) (*emptypb.Empty, error) {
 	log.Printf("gRPC: %s", funcName())
-	nodeClient.NodePriceUpdatesState = nodeClient.PriceUpdatesReady
+	nodePriceGen.ResumeUpdates()
 	return &emptypb.Empty{}, nil
 }
 
@@ -148,7 +146,12 @@ func (s *grpcNodeEventsServer) CurrencyPriceUpdatedEvent(ctx context.Context, in
 func StartServer(wg *sync.WaitGroup) {
 	defer wg.Done()
 	// Create new store
-	nodeClient.NodePriceStore = kvs.NewKeyValueStore(1)
+	var storeErr error
+	nodeClient.NodePriceStore, storeErr = helpers.NewMemoryCurrencyStore()
+	if storeErr != nil {
+		// We shouldn't get here! something is very wrong
+		panic(storeErr)
+	}
 	lis, err := net.Listen("tcp", helpers.NodeCfg.NodeListenAddr)
 	if err != nil {
 		log.Printf("failed to listen: %v", err)

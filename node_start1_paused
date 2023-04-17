@@ -1,0 +1,6 @@
+#!/bin/sh -ue
+exec ./build/node start \
+  --start_paused \
+  --address "127.0.0.1:5053" \
+	--uuid "65FB6EB3-09F9-418B-AC56-DB1120C036A1" \
+	--name "node1"

@@ -11,11 +11,7 @@ message NodeStatusReply {
   string node_uuid = 1; // uuid of this node
   string node_name = 2; // friendly name of this node
   string node_version = 3; // app version of this node
-  enum NodeStreamState {
-    READY = 0;
-    PAUSED = 1;
-  }
-  NodeStreamState node_updates_stream_state = 4;
+  bool node_updates_paused = 4;
   string controller_server = 5;
   message NodeConnectionState {
     enum ConnectionState {

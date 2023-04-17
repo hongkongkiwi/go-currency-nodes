@@ -21,6 +21,8 @@ var seedRand *rand.Rand
 
 const percentChange = 20
 
+var UpdatesPaused = false
+
 type PriceGeneratorApi struct {
 	currencyPairs []string
 	latestPrices  map[string]*PriceCurrency
@@ -129,13 +131,21 @@ func (pg *PriceGeneratorApi) GenRandPrices(percent uint8) {
 		}
 	}
 	// Send this batch of updates to the update channel
-	if pg.updatesChan != nil {
+	if pg.updatesChan != nil && !UpdatesPaused {
 		pg.updatesChan <- updatedPrices
 	}
 }
 
 func (pg *PriceGeneratorApi) SetPricesUpdateChannel(updatesChan chan<- map[string]*PriceCurrency) {
 	pg.updatesChan = updatesChan
+}
+
+func PauseUpdates() {
+	UpdatesPaused = true
+}
+
+func ResumeUpdates() {
+	UpdatesPaused = false
 }
 
 func (pg *PriceGeneratorApi) GenRandPricesForever(wg *sync.WaitGroup, minMs, maxMs uint16, stopChan chan bool) {
