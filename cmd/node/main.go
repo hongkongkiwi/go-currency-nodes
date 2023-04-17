@@ -77,7 +77,7 @@ func nodeStart() error {
 	priceGen, _ = nodePriceGen.NewPriceGeneratorApi(helpers.NodeCfg.CurrencyPairs, updatesChan)
 	// Start generating prices from price API
 	wg.Add(1)
-	go priceGen.GenRandPricesForever(&wg, uint16(helpers.NodeCfg.UpdatesMinFreq), uint16(helpers.NodeCfg.UpdatesMaxFreq), stopChan)
+	go priceGen.GenRandPricesForever(&wg, helpers.NodeCfg.UpdatesMinFreq, helpers.NodeCfg.UpdatesMaxFreq, stopChan)
 	// Start our command server
 	wg.Add(1)
 	go nodeServer.StartServer(&wg, updatesChan)
@@ -210,7 +210,7 @@ func main() {
 					},
 					&cli.DurationFlag{
 						Name:    "updates-max-freq",
-						Value:   time.Duration(5 * time.Second),
+						Value:   time.Duration(6 * time.Second),
 						Usage:   "maximum time to random generate an update",
 						EnvVars: []string{"NODE_PRICEUPDATES_MAX_FREQ"},
 					},

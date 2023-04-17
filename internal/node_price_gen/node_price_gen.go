@@ -146,16 +146,8 @@ func ResumeUpdates() {
 	UpdatesPaused = false
 }
 
-func (pg *PriceGeneratorApi) GenRandPricesForever(wg *sync.WaitGroup, minMs, maxMs uint16, stopChan chan bool) {
+func (pg *PriceGeneratorApi) GenRandPricesForever(wg *sync.WaitGroup, min, max time.Duration, stopChan chan bool) {
 	defer wg.Done()
-	// Do some basic validation of upper/lower
-	if minMs < 200 {
-		minMs = 200
-	}
-	if maxMs <= minMs {
-		maxMs = minMs
-	}
-
 	for {
 		select {
 		case stop := <-stopChan:
@@ -164,7 +156,7 @@ func (pg *PriceGeneratorApi) GenRandPricesForever(wg *sync.WaitGroup, minMs, max
 			}
 		default:
 			pg.GenRandPrices(helpers.NodeCfg.UpdatesPercentChange)
-			sleepTime := seedRand.Intn(int(maxMs-minMs+1)) + int(minMs)
+			sleepTime := seedRand.Intn(int(max.Milliseconds()-min.Milliseconds()+1)) + int(min.Milliseconds())
 			if helpers.NodeCfg.VerboseLog {
 				fmt.Printf("Price Generator: Sleeping for %vms\n", sleepTime)
 			}
