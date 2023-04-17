@@ -49,14 +49,6 @@ node: build_node
 .PHONY: build_docker # Build all docker images
 build_docker: build_docker_cli build_docker_node build_docker_controller
 
-.PHONY: run_docker_cli # Run docker iamge for cli app
-run_docker_cli: check_docker
-	docker run --rm -it github.com/hongkongkiwi/go-currency-nodes/cli
-
-.PHONY: build_docker_cli # Build docker iamge for cli app
-build_docker_cli: check_docker
-	docker build -f docker/Dockerfile --build-arg APP_NAME=cli -t $(DOCKER_TAG)/cli .
-
 .PHONY: run_docker_node # Run docker iamge for node app
 run_docker_node: check_docker
 	docker run --rm -it github.com/hongkongkiwi/go-currency-nodes/node

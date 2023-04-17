@@ -12,7 +12,7 @@ import (
 
 const cli_version = "0.0.1"
 const defaultNodeAddr = "127.0.0.1:5051"
-const defaultNodeRequestTimeout = time.Duration(time.Millisecond * 80)
+const defaultNodeRequestTimeout = time.Duration(time.Millisecond * 150)
 
 func cliVersion() error {
 	fmt.Println("cli version:", cli_version)
@@ -21,7 +21,13 @@ func cliVersion() error {
 
 func clientArgs(cCtx *cli.Context) {
 	cliClient.NodeAddr = cCtx.String("addr")
-	cliClient.NodeRequestTimeout = cCtx.Uint64("timeout")
+	cliClient.NodeRequestTimeout = cCtx.Duration("timeout")
+	cliClient.VerboseLog = cCtx.Bool("verbose")
+	cliClient.QuietLog = cCtx.Bool("quiet")
+	if cliClient.VerboseLog {
+		log.Printf("config node remote addr: %s", cliClient.NodeAddr)
+		log.Printf("config node remote timeout: %s", cliClient.NodeRequestTimeout)
+	}
 }
 
 func main() {
@@ -42,15 +48,29 @@ func main() {
 				Flags: []cli.Flag{
 					&cli.StringFlag{
 						Name:    "addr",
+						Aliases: []string{"address", "remote-address"},
 						Value:   defaultNodeAddr,
-						EnvVars: []string{"NODE_REMOTE_ADDR"},
+						EnvVars: []string{"CLI_NODE_REMOTE_ADDR"},
 						Usage:   "address of the node to connect to",
 					},
 					&cli.DurationFlag{
 						Name:    "timeout",
+						Aliases: []string{"remote-timeout"},
 						Value:   defaultNodeRequestTimeout,
-						EnvVars: []string{"NODE_REMOTE_TIMEOUT"},
+						EnvVars: []string{"CLI_NODE_REMOTE_TIMEOUT"},
 						Usage:   "timeout for calls to node",
+					},
+					&cli.BoolFlag{
+						Name:    "verbose",
+						Value:   false,
+						EnvVars: []string{"CLI_VERBOSE"},
+						Usage:   "turn on verbose logging",
+					},
+					&cli.BoolFlag{
+						Name:    "quiet",
+						Value:   false,
+						EnvVars: []string{"CLI_QUIET"},
+						Usage:   "turn off all logging but reply data",
 					},
 				},
 				Subcommands: []*cli.Command{

@@ -1,5 +1,5 @@
 #!/bin/sh -ue
 exec ./build/node start \
-  --address "127.0.0.1:5054" \
+  --address "127.0.0.1:5052" \
 	--uuid "888F727E-B300-4F45-B9D3-393F69D2CA4E" \
 	--name "node2"

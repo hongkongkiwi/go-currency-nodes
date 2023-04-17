@@ -139,7 +139,7 @@ func main() {
 					},
 					&cli.StringFlag{
 						Name:    "controller",
-						Value:   "127.0.0.1:5052",
+						Value:   "127.0.0.1:5060",
 						Usage:   "set controller address",
 						EnvVars: []string{"NODE_CONTROLLER_ADDR"},
 					},

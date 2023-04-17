@@ -1,0 +1,2 @@
+#!/bin/sh -ue
+exec docker compose dpwm

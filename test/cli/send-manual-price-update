@@ -1,12 +1,21 @@
 #!/bin/sh -ue
-if [ "$(dirname "$0")/../../build/cli" ]; then
-  make -f "$(dirname "$0")/../../Makefile" cli
+BASEDIR="$(dirname "`realpath "$0"`")"
+if [ ! -f "$BASEDIR/../../build/cli" ]; then
+  cd "$BASEDIR/../../"
+  make cli
+  cd "$BASEDIR"
 fi
+
 if [ -z "$1" ]; then
-  echo >&2 "Must pass currency pair e.g. USD_HKD"; exit 1
+  echo >&2 "ERROR: Must pass currency pair e.g. USD_HKD"; exit 1
 fi
 if [ -z "$2" ]; then
-  echo >&2 "Must price e.g. 50.2"; exit 1
+  echo >&2 "ERROR: Must price e.g. 50.2"; exit 1
 fi
-exec "$(dirname "$0")/../../build/cli" node priceupdates new \
+
+export CLI_NODE_REMOTE_ADDR="${CLI_NODE_REMOTE_ADDR:-"127.0.0.1:5051"}"
+echo "Connecting to node: $CLI_NODE_REMOTE_ADDR"
+exec "$BASEDIR/../../build/cli" \
+  node --addr "$CLI_NODE_REMOTE_ADDR" \
+  priceupdates new \
   --price "$2" --currency-pair "$1"

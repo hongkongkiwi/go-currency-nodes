@@ -1,2 +1,12 @@
 #!/bin/sh -ue
-exec ./../../build/cli node priceupdates pause
+BASEDIR="$(dirname "`realpath "$0"`")"
+if [ ! -f "$BASEDIR/../../build/cli" ]; then
+  cd "$BASEDIR/../../"
+  make cli
+  cd "$BASEDIR"
+fi
+export CLI_NODE_REMOTE_ADDR="${CLI_NODE_REMOTE_ADDR:-"127.0.0.1:5051"}"
+echo "Connecting to node: $CLI_NODE_REMOTE_ADDR"
+exec "$BASEDIR/../../build/cli" \
+  node --addr "$CLI_NODE_REMOTE_ADDR" \
+  priceupdates pause

@@ -1,5 +1,12 @@
 #!/bin/sh -ue
-if [ "$(dirname "$0")/../../build/cli" ]; then
-  make -f "$(dirname "$0")/../../Makefile" cli
+BASEDIR="$(dirname "`realpath "$0"`")"
+if [ ! -f "$BASEDIR/../../build/cli" ]; then
+  cd "$BASEDIR/../../"
+  make cli
+  cd "$BASEDIR"
 fi
-exec "$(dirname "$0")/../../build/cli" node currencies
+export NODE_REMOTE_ADDR="${NODE_REMOTE_ADDR:-"127.0.0.1:5051"}"
+echo "Connecting to node: $NODE_REMOTE_ADDR"
+exec "$BASEDIR/../../build/cli" \
+  node --addr "$NODE_REMOTE_ADDR" \
+  currencies

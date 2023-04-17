@@ -6,6 +6,7 @@ package internal
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net"
 	"runtime"
@@ -114,7 +115,9 @@ func (s *grpcNodeCommandsServer) NodeCurrenciesPriceEventsPause(ctx context.Cont
 // Resume sending currency price updates to controller
 // rpc NodeCurrenciesPriceEventsResume (google.protobuf.Empty) returns (google.protobuf.Empty) {}
 func (s *grpcNodeCommandsServer) NodeCurrenciesPriceEventsResume(ctx context.Context, _ *emptypb.Empty) (*emptypb.Empty, error) {
-	log.Printf("gRPC: %s", funcName())
+	if helpers.NodeCfg.VerboseLog {
+		log.Printf("gRPC: %s", funcName())
+	}
 	nodePriceGen.ResumeUpdates()
 	return &emptypb.Empty{}, nil
 }
@@ -122,7 +125,9 @@ func (s *grpcNodeCommandsServer) NodeCurrenciesPriceEventsResume(ctx context.Con
 // Request a list of all subscribed currencies
 // rpc NodeCurrencies (google.protobuf.Empty) returns (NodeSubscriptionsReply) {}
 func (s *grpcNodeCommandsServer) NodeCurrencies(ctx context.Context, _ *emptypb.Empty) (*pb.NodeCurrenciesReply, error) {
-	log.Printf("gRPC: %s", funcName())
+	if helpers.NodeCfg.VerboseLog {
+		log.Printf("gRPC: %s", funcName())
+	}
 	currency_pairs, _ := nodeClient.NodePriceStore.Keys()
 	return &pb.NodeCurrenciesReply{CurrencyPairs: currency_pairs}, nil
 }
@@ -130,14 +135,18 @@ func (s *grpcNodeCommandsServer) NodeCurrencies(ctx context.Context, _ *emptypb.
 // Request node to manually refresh prices from controller
 // rpc NodeCurrenciesRefreshPrices (google.protobuf.Empty) returns (google.protobuf.Empty) {}
 func (s *grpcNodeCommandsServer) NodeCurrenciesRefreshPrices(ctx context.Context, _ *emptypb.Empty) (*emptypb.Empty, error) {
-	log.Printf("gRPC: %s", funcName())
+	if helpers.NodeCfg.VerboseLog {
+		log.Printf("gRPC: %s", funcName())
+	}
 	return &emptypb.Empty{}, nil
 }
 
 // Kill the Node
 // rpc NodeAppKill (google.protobuf.Empty) returns (google.protobuf.Empty) {}
 func (s *grpcNodeCommandsServer) NodeAppKill(ctx context.Context, _ *emptypb.Empty) (*emptypb.Empty, error) {
-	log.Printf("gRPC: %s", funcName())
+	if helpers.NodeCfg.VerboseLog {
+		log.Printf("gRPC: %s", funcName())
+	}
 	atexit.Exit(0)
 	// Sadly we never get here since we quit
 	return &emptypb.Empty{}, nil
@@ -146,15 +155,27 @@ func (s *grpcNodeCommandsServer) NodeAppKill(ctx context.Context, _ *emptypb.Emp
 // Called when a new price comes in from controller - all prices are cached locally
 // rpc CurrencyPriceUpdatedEvent (CurrencyPriceUpdateEventReq) returns (google.protobuf.Empty) {}
 func (s *grpcNodeEventsServer) CurrencyPriceUpdatedEvent(ctx context.Context, in *pb.CurrencyPriceUpdateEventReq) (*emptypb.Empty, error) {
-	log.Printf("gRPC: %s", funcName())
+	if helpers.NodeCfg.VerboseLog {
+		log.Printf("gRPC: %s %v", funcName(), in.CurrencyItems)
+	}
 	// Store the updated prices into our local store
 	for _, c := range in.CurrencyItems {
-		log.Printf("gRPC: CurrencyPriceEvent: %s", c)
+		if helpers.NodeCfg.VerboseLog {
+			log.Printf("gRPC: CurrencyPriceEvent: %s", c)
+		}
 		nodeClient.NodePriceStore.Set(c.CurrencyPair, &helpers.CurrencyStoreItem{
 			Price:   c.Price,
 			ValidAt: c.PriceValidAt.AsTime(),
 		})
 	}
+
+	// Loop so we can format for logging
+	logOutputPrices := make([][2]string, len(in.CurrencyItems))
+	for i, curr := range in.CurrencyItems {
+		logOutputPrices[i] = [2]string{curr.CurrencyPair, fmt.Sprintf("%0.2f", curr.Price)}
+	}
+	log.Printf("Received price updates from server %v\n", logOutputPrices)
+
 	return &emptypb.Empty{}, nil
 }
 

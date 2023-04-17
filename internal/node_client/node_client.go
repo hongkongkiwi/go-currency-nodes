@@ -66,9 +66,6 @@ func KeepAliveTick(keepAliveStopChan chan bool) {
 
 // Helper to reset keep alive
 func ResetKeepAlive() error {
-	if helpers.NodeCfg.VerboseLog {
-		log.Println("Keep alive is reset")
-	}
 	if keepAliveTicker == nil {
 		return fmt.Errorf("keep alive is already stopped")
 	}
@@ -165,7 +162,9 @@ func ClientControllerVersion() error {
 	if connectErr != nil {
 		return connectErr
 	}
-	log.Printf("%s->gRPC->Request: %s", debugName, funcName())
+	if helpers.NodeCfg.VerboseLog {
+		log.Printf("%s->gRPC->Request: %s", debugName, funcName())
+	}
 	ResetKeepAlive()
 	c := pb.NewControllerCommandsClient(conn)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(RequestTimeout))
@@ -178,7 +177,9 @@ func ClientControllerVersion() error {
 	if err != nil {
 		return fmt.Errorf("%s->gRPC->Error: %s: %v", debugName, funcName(), err)
 	}
-	log.Printf("%s->gRPC->Reply: %s: %s", debugName, funcName(), r.ControllerVersion)
+	if helpers.NodeCfg.VerboseLog {
+		log.Printf("%s->gRPC->Reply: %s: %s", debugName, funcName(), r.ControllerVersion)
+	}
 	return nil
 }
 
@@ -189,7 +190,9 @@ func ClientControllerKeepAlive() error {
 	if connectErr != nil {
 		return connectErr
 	}
-	log.Printf("%s->gRPC->Request: %s", debugName, funcName())
+	if helpers.NodeCfg.VerboseLog {
+		log.Printf("%s->gRPC->Request: %s", debugName, funcName())
+	}
 	ResetKeepAlive()
 	c := pb.NewControllerCommandsClient(conn)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(RequestTimeout))
@@ -202,7 +205,10 @@ func ClientControllerKeepAlive() error {
 	if sendErr != nil {
 		return fmt.Errorf("%s->gRPC->Error: %s: %v", debugName, funcName(), sendErr)
 	}
-	log.Printf("%s->gRPC->Reply: %s", debugName, funcName())
+	if helpers.NodeCfg.VerboseLog {
+		log.Printf("%s->gRPC->Reply: %s", debugName, funcName())
+	}
+	log.Printf("Sent keep alive to server")
 	return nil
 }
 
@@ -216,7 +222,9 @@ func ClientControllerCurrencyPrice() error {
 	if len(helpers.NodeCfg.CurrencyPairs) == 0 {
 		return nil
 	}
-	log.Printf("%s->gRPC->Request: %s (%s)", debugName, funcName(), helpers.NodeCfg.CurrencyPairs)
+	if helpers.NodeCfg.VerboseLog {
+		log.Printf("%s->gRPC->Request: %s (%s)", debugName, funcName(), helpers.NodeCfg.CurrencyPairs)
+	}
 	ResetKeepAlive()
 	c := pb.NewControllerCommandsClient(conn)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(RequestTimeout))
@@ -230,7 +238,9 @@ func ClientControllerCurrencyPrice() error {
 	if sendErr != nil {
 		return fmt.Errorf("%s->gRPC->Error: %s: %v", debugName, funcName(), sendErr)
 	}
-	log.Printf("%s->gRPC->Reply: %s: %s", debugName, funcName(), r.CurrencyItems)
+	if helpers.NodeCfg.VerboseLog {
+		log.Printf("%s->gRPC->Reply: %s: %s", debugName, funcName(), r.CurrencyItems)
+	}
 	// Update our price store with the returned prices
 	for _, currencyItem := range r.CurrencyItems {
 		NodePriceStore.Set(currencyItem.CurrencyPair, &helpers.CurrencyStoreItem{Price: currencyItem.Price, ValidAt: currencyItem.PriceValidAt.AsTime()})
@@ -262,7 +272,9 @@ func ClientControllerCurrencyPriceUpdateAll() error {
 		}
 	}
 	if len(currencyItems) > 0 {
-		log.Printf("%s->gRPC->Request: %s (%s)", debugName, funcName(), currencyPairs)
+		if helpers.NodeCfg.VerboseLog {
+			log.Printf("%s->gRPC->Request: %s (%s)\n", debugName, funcName(), currencyPairs)
+		}
 		ResetKeepAlive()
 		c := pb.NewControllerCommandsClient(conn)
 		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(RequestTimeout))
@@ -276,7 +288,9 @@ func ClientControllerCurrencyPriceUpdateAll() error {
 		if sendErr != nil {
 			return fmt.Errorf("%s->gRPC->Error: %s: %v", debugName, funcName(), sendErr)
 		}
-		log.Printf("%s->gRPC->Reply: %s: %s", debugName, funcName(), r.CurrencyItems)
+		if helpers.NodeCfg.VerboseLog {
+			log.Printf("%s->gRPC->Reply: %s: %s", debugName, funcName(), r.CurrencyItems)
+		}
 	}
 	return nil
 }
@@ -301,11 +315,21 @@ func ClientControllerCurrencyPriceUpdate(currencyPairs []string) error {
 		}
 	}
 	if len(currencyItems) > 0 {
-		log.Printf("%s->gRPC->Request: %s (%s)", debugName, funcName(), currencyPairs)
+		if helpers.NodeCfg.VerboseLog {
+			log.Printf("%s->gRPC->Request: %s (%s)\n", debugName, funcName(), currencyPairs)
+		}
 		ResetKeepAlive()
 		c := pb.NewControllerCommandsClient(conn)
 		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(RequestTimeout))
 		defer cancel()
+
+		// Loop so we can format for logging
+		logOutputPrices := make([][2]string, len(currencyItems))
+		for i, curr := range currencyItems {
+			logOutputPrices[i] = [2]string{curr.CurrencyPair, fmt.Sprintf("%0.2f", curr.Price)}
+		}
+		log.Printf("Sent price updates to server %v\n", logOutputPrices)
+
 		r, sendErr := c.CurrencyPriceUpdate(ctx, &pb.CurrencyPriceUpdateReq{
 			CurrencyItems: currencyItems,
 			NodeUuid:      helpers.NodeCfg.UUID.String(),
@@ -315,7 +339,9 @@ func ClientControllerCurrencyPriceUpdate(currencyPairs []string) error {
 		if sendErr != nil {
 			return fmt.Errorf("%s->gRPC->Error: %s: %v", debugName, funcName(), sendErr)
 		}
-		log.Printf("%s->gRPC->Reply: %s: %s", debugName, funcName(), r.CurrencyItems)
+		if helpers.NodeCfg.VerboseLog {
+			log.Printf("%s->gRPC->Reply: %s: %s", debugName, funcName(), r.CurrencyItems)
+		}
 	}
 	return nil
 }
@@ -331,7 +357,9 @@ func ClientControllerCurrencyPriceSubscribe() error {
 	if len(helpers.NodeCfg.CurrencyPairs) == 0 {
 		return nil
 	}
-	log.Printf("%s->gRPC->Request: %s (%s)", debugName, funcName(), helpers.NodeCfg.CurrencyPairs)
+	if helpers.NodeCfg.VerboseLog {
+		log.Printf("%s->gRPC->Request: %s (%s)", debugName, funcName(), helpers.NodeCfg.CurrencyPairs)
+	}
 	ResetKeepAlive()
 
 	c := pb.NewControllerCommandsClient(conn)
@@ -346,6 +374,9 @@ func ClientControllerCurrencyPriceSubscribe() error {
 	if sendErr != nil {
 		return fmt.Errorf("%s->gRPC->Error: %s: %v", debugName, funcName(), sendErr)
 	}
-	log.Printf("%s->gRPC->Reply: %s\n%s\n", debugName, funcName(), protojson.Format(r))
+	if helpers.NodeCfg.VerboseLog {
+		log.Printf("%s->gRPC->Reply: %s\n%s\n", debugName, funcName(), protojson.Format(r))
+	}
+	log.Printf("Subscribed to currency pairs %v", helpers.NodeCfg.CurrencyPairs)
 	return nil
 }

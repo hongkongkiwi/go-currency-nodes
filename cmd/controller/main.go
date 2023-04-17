@@ -106,7 +106,7 @@ func main() {
 					&cli.StringFlag{
 						Name:    "address",
 						Aliases: []string{"listen_address"},
-						Value:   "127.0.0.1:5052",
+						Value:   "127.0.0.1:5060",
 						Usage:   "set listen address for this controller",
 						EnvVars: []string{"CONTROLLER_LISTEN_ADDR"},
 					},

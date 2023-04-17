@@ -63,8 +63,7 @@ func CleanupNodeConnectionTick() {
 			// Check if our connection is stale
 			if time.Now().After(nodeConnection.StaleAt) {
 				// if helpers.ControllerCfg.VerboseLog {
-				log.Printf("NodeConnection %s has become stale removing it", uuidStr)
-				// }
+				log.Printf("Node %s has become stale removing it", uuidStr)
 				if nodeConnection.Conn != nil {
 					if nodeConnection.Conn.GetState() != connectivity.Shutdown {
 						// Close connection first
@@ -130,18 +129,16 @@ func updateNodeConnection(nodeUuid string, nodeAddr string, nodeStaleAt time.Tim
 			Conn:     conn,
 			StaleAt:  nodeStaleAt,
 		}
-		fmt.Printf("new updateNodeConnection: %s = %s\n", nodeUuid, nodeAddr)
-	} else {
-		fmt.Printf("existing updateNodeConnection: %s = %s\n", nodeUuid, nodeAddr)
 	}
-	fmt.Printf("NodeConnections: %v\n", NodeConnections)
 	return nil
 }
 
 // Return our controller version
 // rpc ControllerVersion (google.protobuf.Empty) returns (ControllerVersionReply) {}
 func (s *grpcControllerServer) ControllerVersion(ctx context.Context, in *pb.ControllerVersionReq) (*pb.ControllerVersionReply, error) {
-	log.Printf("%s->gRPC->Incoming: %s\n%s\n", debugName, funcName(), protojson.Format(in))
+	if helpers.ControllerCfg.VerboseLog {
+		log.Printf("%s->gRPC->Incoming: %s\n%s\n", debugName, funcName(), protojson.Format(in))
+	}
 	// Update connection details based on this request
 	updateNodeConnection(in.NodeUuid, in.NodeAddr, in.NodeStaleAt.AsTime())
 	return &pb.ControllerVersionReply{ControllerVersion: ControllerVersion}, nil
@@ -150,22 +147,31 @@ func (s *grpcControllerServer) ControllerVersion(ctx context.Context, in *pb.Con
 // Just a keep alive command, no other use
 // rpc NodeKeepAlive (NodeKeepAliveReq) returns (google.protobuf.Empty) {}
 func (s *grpcControllerServer) NodeKeepAlive(ctx context.Context, in *pb.NodeKeepAliveReq) (*emptypb.Empty, error) {
-	log.Printf("%s->gRPC->Incoming: %s\n%s\n", debugName, funcName(), protojson.Format(in))
+	if helpers.ControllerCfg.VerboseLog {
+		log.Printf("%s->gRPC->Incoming: %s\n%s\n", debugName, funcName(), protojson.Format(in))
+	}
 	// Update connection details based on this request
 	updateNodeConnection(in.NodeUuid, in.NodeAddr, in.NodeStaleAt.AsTime())
+	log.Printf("Node %s is still alive", in.NodeUuid)
 	return &emptypb.Empty{}, nil
 }
 
 // Return all currencies that this Node requests from our currency store
 // rpc CurrencyPrice (CurrencyPriceReq) returns (CurrencyGetPriceReply) {}
 func (s *grpcControllerServer) CurrencyPrice(ctx context.Context, in *pb.CurrencyPriceReq) (*pb.CurrencyPriceReply, error) {
-	log.Printf("%s->gRPC->Incoming: %s\n%s\n", debugName, funcName(), protojson.Format(in))
+	if helpers.ControllerCfg.VerboseLog {
+		log.Printf("%s->gRPC->Incoming: %s\n%s\n", debugName, funcName(), protojson.Format(in))
+	}
 	// Update connection details based on this request
 	updateNodeConnection(in.NodeUuid, in.NodeAddr, in.NodeStaleAt.AsTime())
 	var currencyItems []*pb.CurrencyItem
 	for _, currencyPair := range in.CurrencyPairs {
 		if item, _ := ControllerPriceStore.Get(currencyPair); item != nil {
-			currencyItems = append(currencyItems, &pb.CurrencyItem{Price: 123})
+			currencyItems = append(currencyItems, &pb.CurrencyItem{
+				CurrencyPair: currencyPair,
+				Price:        item.Price,
+				PriceValidAt: timestamppb.New(item.ValidAt),
+			})
 		}
 	}
 	return &pb.CurrencyPriceReply{CurrencyItems: currencyItems}, nil
@@ -174,13 +180,16 @@ func (s *grpcControllerServer) CurrencyPrice(ctx context.Context, in *pb.Currenc
 // Update our local currency store with some simple validation
 // rpc CurrencyPriceUpdate (CurrencyPriceUpdateReq) returns (CurrencyPriceUpdateReply) {}
 func (s *grpcControllerServer) CurrencyPriceUpdate(ctx context.Context, in *pb.CurrencyPriceUpdateReq) (*pb.CurrencyPriceUpdateReply, error) {
-	log.Printf("%s->gRPC->Incoming: %s\n%s\n", debugName, funcName(), protojson.Format(in))
+	if helpers.ControllerCfg.VerboseLog {
+		log.Printf("%s->gRPC->Incoming: %s\n%s\n", debugName, funcName(), protojson.Format(in))
+	}
 	// Update connection details based on this request
 	updateNodeConnection(in.NodeUuid, in.NodeAddr, in.NodeStaleAt.AsTime())
 	updatedCurrencyStoreItems := make(map[string]*helpers.CurrencyStoreItem, len(in.CurrencyItems))
 	var replyCurrencyItems []*pb.CurrencyItem
 	// Update local price store
 	for _, currencyItem := range in.CurrencyItems {
+		log.Printf("Node %s update for %s (%0.2f)", in.NodeUuid, currencyItem.CurrencyPair, currencyItem.Price)
 		// Get our currenct price updated time from price store
 		if currPrice, _ := ControllerPriceStore.Get(currencyItem.CurrencyPair); currPrice != nil {
 			// Do some simple validation to check the new time after after old time and different price
@@ -193,11 +202,12 @@ func (s *grpcControllerServer) CurrencyPriceUpdate(ctx context.Context, in *pb.C
 				ControllerPriceStore.Set(currencyItem.CurrencyPair, currencyStoreItem)
 				updatedCurrencyStoreItems[currencyItem.CurrencyPair] = currencyStoreItem
 				replyCurrencyItems = append(replyCurrencyItems, &pb.CurrencyItem{
+					CurrencyPair: currencyItem.CurrencyPair,
 					Price:        currencyStoreItem.Price,
 					PriceValidAt: timestamppb.New(currencyStoreItem.ValidAt),
 				})
 			} else {
-				log.Printf("skipped update because it is earlier than our latest update")
+				log.Printf("Node %s update REJECTED_OLD_PRICE for %s (%0.2f)", in.NodeUuid, currencyItem.CurrencyPair, currencyItem.Price)
 			}
 			// No existing just create a new one
 		} else {
@@ -209,6 +219,7 @@ func (s *grpcControllerServer) CurrencyPriceUpdate(ctx context.Context, in *pb.C
 			ControllerPriceStore.Set(currencyItem.CurrencyPair, currencyStoreItem)
 			updatedCurrencyStoreItems[currencyItem.CurrencyPair] = currencyStoreItem
 			replyCurrencyItems = append(replyCurrencyItems, &pb.CurrencyItem{
+				CurrencyPair: currencyItem.CurrencyPair,
 				Price:        currencyStoreItem.Price,
 				PriceValidAt: timestamppb.New(currencyStoreItem.ValidAt),
 			})
@@ -218,7 +229,6 @@ func (s *grpcControllerServer) CurrencyPriceUpdate(ctx context.Context, in *pb.C
 	if len(updatedCurrencyStoreItems) > 0 {
 		// Without this inner loop something something weird happens in golang channel
 		if priceUpdatesChan != nil {
-			//fmt.Printf("test 123: %v", len(updatedCurrencyStoreItems))
 			priceUpdatesChan <- updatedCurrencyStoreItems
 		}
 	}
@@ -228,7 +238,9 @@ func (s *grpcControllerServer) CurrencyPriceUpdate(ctx context.Context, in *pb.C
 // Subscribe to receive unsolicited updates for some currencies
 // rpc CurrencyPriceSubscribe (CurrencyPriceSubscribeReq) returns (CurrencyPriceSubscribeReply) {}
 func (s *grpcControllerServer) CurrencyPriceSubscribe(ctx context.Context, in *pb.CurrencyPriceSubscribeReq) (*pb.CurrencyPriceSubscribeReply, error) {
-	log.Printf("%s->gRPC->Incoming: %s\n%s\n", debugName, funcName(), protojson.Format(in))
+	if helpers.ControllerCfg.VerboseLog {
+		log.Printf("%s->gRPC->Incoming: %s\n%s\n", debugName, funcName(), protojson.Format(in))
+	}
 	// Update connection details based on this request
 	updateNodeConnection(in.NodeUuid, in.NodeAddr, in.NodeStaleAt.AsTime())
 	var replyCurrencyItems []*pb.CurrencyItem
@@ -249,6 +261,7 @@ func (s *grpcControllerServer) CurrencyPriceSubscribe(ctx context.Context, in *p
 			}
 			if currItem, _ := ControllerPriceStore.Get(currencyPair); currItem != nil {
 				replyCurrencyItems = append(replyCurrencyItems, &pb.CurrencyItem{
+					CurrencyPair: currencyPair,
 					Price:        currItem.Price,
 					PriceValidAt: timestamppb.New(currItem.ValidAt),
 				})
@@ -261,6 +274,7 @@ func (s *grpcControllerServer) CurrencyPriceSubscribe(ctx context.Context, in *p
 			}
 		}
 	}
+	log.Printf("Node %s subscribed to %v\n", in.NodeUuid, in.CurrencyPairs)
 	return &pb.CurrencyPriceSubscribeReply{CurrencyItems: replyCurrencyItems}, nil
 }
 

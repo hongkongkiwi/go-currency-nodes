@@ -1,0 +1,2 @@
+#!/bin/sh -ue
+exec docker compose run --rm -it --service-ports node3 $@

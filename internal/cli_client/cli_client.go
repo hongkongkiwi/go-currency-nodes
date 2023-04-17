@@ -9,11 +9,13 @@ import (
 	"fmt"
 	"log"
 	"runtime"
+	"strings"
 	"time"
 
 	pb "github.com/hongkongkiwi/go-currency-nodes/gen/pb" // imports as package "cli"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/protobuf/encoding/protojson"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -21,11 +23,14 @@ var clientConn *grpc.ClientConn
 
 // Remove Node Address to connect to
 var NodeAddr string
-var NodeRequestTimeout uint64
+var NodeRequestTimeout time.Duration
+var VerboseLog bool = false
+var QuietLog bool = false
 
 func funcName() string {
 	pc, _, _, _ := runtime.Caller(1)
-	return runtime.FuncForPC(pc).Name()
+	names := strings.Split(runtime.FuncForPC(pc).Name(), ".")
+	return names[len(names)-1]
 }
 
 func ClientConnect(nodeAddress string) (pb.NodeCommandsClient, context.Context, context.CancelFunc, error) {
@@ -47,32 +52,44 @@ func ClientDisconnect() {
 // rpc NodeUUID (google.protobuf.Empty) returns (NodeUUIDReply) {}
 func ClientNodeUUID() error {
 	c, ctx, cancel, connectErr := ClientConnect(NodeAddr)
+	defer cancel()
 	if connectErr != nil {
 		return connectErr
 	}
-	defer cancel()
-	log.Printf("gRPC: Request: %s", funcName())
+	if VerboseLog {
+		log.Printf("gRPC: Request: %s\n", funcName())
+	}
 	r, err := c.NodeUUID(ctx, &emptypb.Empty{})
 	if err != nil {
-		return fmt.Errorf("could not call gRPC NodeUUID: %v", err)
+		return fmt.Errorf("could not call gRPC %s: %v", funcName(), err)
 	}
-	log.Printf("gRPC: Reply: %s: %s", funcName(), r.NodeUuid)
+	if VerboseLog {
+		log.Printf("gRPC: Reply: %s: %s", funcName(), r.NodeUuid)
+	} else {
+		fmt.Printf("%s\n", r.NodeUuid)
+	}
 	return nil
 }
 
 // rpc NodeVersion (google.protobuf.Empty) returns (NodeVersionReply) {}
 func ClientNodeAppVersion() error {
 	c, ctx, cancel, connectErr := ClientConnect(NodeAddr)
+	defer cancel()
 	if connectErr != nil {
 		return connectErr
 	}
-	defer cancel()
-	log.Printf("gRPC: Request: %s", funcName())
+	if VerboseLog {
+		log.Printf("gRPC: Request: %s\n", funcName())
+	}
 	r, err := c.NodeAppVersion(ctx, &emptypb.Empty{})
 	if err != nil {
-		return fmt.Errorf("could not call gRPC NodeVersion: %v", err)
+		return fmt.Errorf("could not call gRPC %s: %v", funcName(), err)
 	}
-	log.Printf("gRPC: Reply: %s: %s", funcName(), r.NodeVersion)
+	if VerboseLog {
+		log.Printf("gRPC: Reply: %s: %s\n", funcName(), r.NodeVersion)
+	} else {
+		fmt.Printf("%s\n", r.NodeVersion)
+	}
 	return nil
 }
 
@@ -82,13 +99,22 @@ func ClientNodeManualPriceUpdate(currencyPair string, price float64) error {
 		return connectErr
 	}
 	defer cancel()
-	log.Printf("gRPC: Request: %s", funcName())
+	if VerboseLog {
+		log.Printf("gRPC: Request: %s\n", funcName())
+	}
 	_, err := c.NodeManualPriceUpdate(ctx, &pb.NodeManualPriceUpdateReq{
 		CurrencyPair: currencyPair,
 		Price:        price,
 	})
 	if err != nil {
-		return fmt.Errorf("could not call gRPC NodeVersion: %v", err)
+		return fmt.Errorf("could not call gRPC %s: %v", funcName(), err)
+	}
+	if VerboseLog {
+		log.Printf("gRPC: Reply: %s\n", funcName())
+	} else {
+		if !QuietLog {
+			fmt.Printf("Successfully Sent\n")
+		}
 	}
 	return nil
 }
@@ -100,12 +126,18 @@ func ClientNodeStatus() error {
 		return connectErr
 	}
 	defer cancel()
-	log.Printf("gRPC: Request: %s", funcName())
+	if VerboseLog {
+		log.Printf("gRPC: Request: %s\n", funcName())
+	}
 	r, err := c.NodeStatus(ctx, &emptypb.Empty{})
 	if err != nil {
-		return fmt.Errorf("could not call gRPC NodeStatus: %v", err)
+		return fmt.Errorf("could not call gRPC %s: %v", funcName(), err)
 	}
-	log.Printf("gRPC: Reply: %s: %s", funcName(), r)
+	if VerboseLog {
+		log.Printf("gRPC: Reply: %s: %s\n", funcName(), r)
+	} else {
+		fmt.Printf("%v\n", protojson.Format(r))
+	}
 	return nil
 }
 
@@ -116,13 +148,21 @@ func ClientNodeUpdatesPause() error {
 		return connectErr
 	}
 	defer cancel()
-	log.Printf("gRPC: Request: %s", funcName())
+	if VerboseLog {
+		log.Printf("gRPC: Request: %s\n", funcName())
+	}
 	// No interesting reply, ignore any data
 	_, err := c.NodeCurrenciesPriceEventsPause(ctx, &emptypb.Empty{})
 	if err != nil {
-		return fmt.Errorf("could not call gRPC NodeUpdatesPause: %v", err)
+		return fmt.Errorf("could not call gRPC %s: %v", funcName(), err)
 	}
-	log.Printf("gRPC: Reply: %s", funcName())
+	if VerboseLog {
+		log.Printf("gRPC: Reply: %s\n", funcName())
+	} else {
+		if !QuietLog {
+			fmt.Printf("Successfully Sent\n")
+		}
+	}
 	return nil
 }
 
@@ -133,13 +173,21 @@ func ClientNodeUpdatesResume() error {
 		return connectErr
 	}
 	defer cancel()
-	log.Printf("gRPC: Request: %s", funcName())
+	if VerboseLog {
+		log.Printf("gRPC: Request: %s\n", funcName())
+	}
 	// No interesting reply, ignore any data
 	_, err := c.NodeCurrenciesPriceEventsResume(ctx, &emptypb.Empty{})
 	if err != nil {
-		return fmt.Errorf("could not call gRPC NodeUpdatesResume: %v", err)
+		return fmt.Errorf("could not call gRPC %s: %v", funcName(), err)
 	}
-	log.Printf("gRPC: Reply: %s", funcName())
+	if VerboseLog {
+		log.Printf("gRPC: Reply: %s\n", funcName())
+	} else {
+		if !QuietLog {
+			fmt.Printf("Successfully Sent\n")
+		}
+	}
 	return nil
 }
 
@@ -151,12 +199,18 @@ func ClientNodeCurrencies() error {
 		return connectErr
 	}
 	defer cancel()
-	log.Printf("gRPC: Request: %s", funcName())
+	if VerboseLog {
+		log.Printf("gRPC: Request: %s\n", funcName())
+	}
 	r, err := c.NodeCurrencies(ctx, &emptypb.Empty{})
 	if err != nil {
-		return fmt.Errorf("could not call gRPC NodeCurrencies: %v", err)
+		return fmt.Errorf("could not call gRPC %s: %v", funcName(), err)
 	}
-	log.Printf("gRPC: Reply: %s: %s", funcName(), r)
+	if VerboseLog {
+		log.Printf("gRPC: Reply: %s: %s\n", funcName(), r)
+	} else {
+		fmt.Printf("%v\n", protojson.Format(r))
+	}
 	return nil
 }
 
@@ -167,13 +221,19 @@ func ClientNodeAppKill() error {
 		return connectErr
 	}
 	defer cancel()
-	log.Printf("gRPC: Request: %s", funcName())
+	log.Printf("gRPC: Request: %s\n", funcName())
 	// No interesting reply, ignore any data
 	_, err := c.NodeAppKill(ctx, &emptypb.Empty{})
 	// NOTE: nmeed to handle the fact we never recieve a reply here after asking app to quit
 	if err != nil {
-		return fmt.Errorf("could not call gRPC NodeAppKill: %v", err)
+		return fmt.Errorf("could not call gRPC %s: %v", funcName(), err)
 	}
-	log.Printf("gRPC: Reply: %s", funcName())
+	if VerboseLog {
+		log.Printf("gRPC: Reply: %s\n", funcName())
+	} else {
+		if !QuietLog {
+			fmt.Printf("Successfully Sent\n")
+		}
+	}
 	return nil
 }
