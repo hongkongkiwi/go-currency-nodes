@@ -1,7 +1,11 @@
-docker/instancedata/**
-gen/**
+v1/docker/instancedata/**
+v1/gen/**
+v1/build/**
+v2/docker/instancedata/**
+v2/gen/**
+v2/build/**
+
 *.pb.go
-build/**
 .DS_Store
 
 # If you prefer the allow list template instead of the deny list, see community template:
