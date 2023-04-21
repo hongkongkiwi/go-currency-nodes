@@ -14,5 +14,12 @@ type ControllerCfgStruct struct {
 	AppVersion string
 }
 
+type CliCfgStruct struct {
+	AppVersion       string
+	ControllerServer string
+	CliUUID          *uuid.UUID
+}
+
 var ControllerCfg ControllerCfgStruct
 var NodeCfg NodeCfgStruct
+var CliCfg CliCfgStruct

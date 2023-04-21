@@ -10,6 +10,7 @@ import (
 
 	"github.com/gofrs/uuid/v5"
 	pb "github.com/hongkongkiwi/go-currency-nodes/v2/gen/pb"
+	helpers "github.com/hongkongkiwi/go-currency-nodes/v2/internal/helpers"
 	stores "github.com/hongkongkiwi/go-currency-nodes/v2/internal/stores"
 	"github.com/tebeka/atexit"
 
@@ -39,7 +40,7 @@ type CliCmdStreamServer struct {
 }
 
 // Every incoming message has a UUID so store it alongside our send channel
-func StoreChannel(uuidStr string, channel chan interface{}) (*uuid.UUID, error) {
+func StoreNodeChannel(uuidStr string, channel chan interface{}) (*uuid.UUID, error) {
 	uuid, err := uuid.FromString(uuidStr)
 	if err != nil {
 		return nil, fmt.Errorf("invalid uuid cannot create channel")
@@ -48,6 +49,18 @@ func StoreChannel(uuidStr string, channel chan interface{}) (*uuid.UUID, error) 
 		return nil, fmt.Errorf("invalid channel passed")
 	}
 	nodeChannelStore.SetWithUUID(&uuid, channel)
+	return &uuid, nil
+}
+
+func StoreCliChannel(uuidStr string, channel chan interface{}) (*uuid.UUID, error) {
+	uuid, err := uuid.FromString(uuidStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid uuid cannot create channel")
+	}
+	if channel == nil {
+		return nil, fmt.Errorf("invalid channel passed")
+	}
+	cliChannelStore.SetWithUUID(&uuid, channel)
 	return &uuid, nil
 }
 
@@ -148,7 +161,7 @@ func ControllerListNodesReq(cliUuid *uuid.UUID) error {
 func ControllerKickNodesReq(cliUuid *uuid.UUID, nodeUuids []*uuid.UUID) error {
 	log.Printf("ControllerKickNodes: %v", nodeUuids)
 	genericPb, _ := anypb.New(&pb.ControllerKickNodesReq{
-		NodeUuids: stringsFromUuids(nodeUuids),
+		NodeUuids: helpers.StringsFromUuids(nodeUuids),
 	})
 	return sendToCli(cliUuid, genericPb)
 }
@@ -169,45 +182,6 @@ func logError(err error) error {
 		log.Print(err)
 	}
 	return err
-}
-
-// Helper method to generate an array of valid uuids
-func uuidsFromStrings(uuidStrings []string) ([]*uuid.UUID, []error) {
-	// Use a list so we can deduplicate any duplicates
-	uuidsMap := make(map[string]*uuid.UUID, len(uuidStrings))
-	errors := make([]error, 0)
-	for _, uuidString := range uuidStrings {
-		uuid, err := uuid.FromString(uuidString)
-		if err != nil {
-			errors = append(errors, fmt.Errorf("invalid uuid %s", uuidString))
-			continue
-		}
-		uuidsMap[uuidString] = &uuid
-	}
-	// Build our array for returning
-	uuidsArr := make([]*uuid.UUID, len(uuidStrings))
-	i := 0
-	for _, uuid := range uuidsMap {
-		uuidsArr[i] = uuid
-		i++
-	}
-	return uuidsArr, errors
-}
-
-func stringsFromUuids(uuids []*uuid.UUID) []string {
-	// Use a list so we can deduplicate any duplicates
-	uuidsMap := make(map[string]string, len(uuids))
-	for _, uuid := range uuids {
-		uuidsMap[uuid.String()] = uuid.String()
-	}
-	// Build our array for returning
-	uuidsArr := make([]string, len(uuids))
-	i := 0
-	for _, uuid := range uuidsMap {
-		uuidsArr[i] = uuid
-		i++
-	}
-	return uuidsArr
 }
 
 func sendNodeThread(stream pb.NodeCmdStream_NodeCommandStreamServer, sendChan <-chan interface{}, cancelChan <-chan bool) {
@@ -279,7 +253,7 @@ func (srv *CliCmdStreamServer) CliCommandStream(stream pb.CliCmdStream_CliComman
 			continue
 		}
 		var setupErr error
-		cliUuid, setupErr = StoreChannel(in.CliUuid, sendChan)
+		cliUuid, setupErr = StoreCliChannel(in.CliUuid, sendChan)
 		if setupErr != nil {
 			log.Printf("setup error %v", setupErr)
 			cancelChan <- true
@@ -290,7 +264,7 @@ func (srv *CliCmdStreamServer) CliCommandStream(stream pb.CliCmdStream_CliComman
 			return nil
 		}
 		if in.NodeCommand != nil {
-			sendToUUIDs, errs := uuidsFromStrings(in.NodeUuids)
+			sendToUUIDs, errs := helpers.UuidsFromStrings(in.NodeUuids)
 			if len(errs) > 0 {
 				for err := range errs {
 					log.Printf("Cli UUID Error: %v", err)
@@ -319,7 +293,7 @@ func handleCliCommand(genericCmd *anypb.Any, cliUuid *uuid.UUID, sendToUUIDs []*
 		}
 	case *pb.ControllerKickNodesReq:
 		log.Printf("Cli Requested ControllerKickNode")
-		nodeUuids, _ := uuidsFromStrings(cmd.NodeUuids)
+		nodeUuids, _ := helpers.UuidsFromStrings(cmd.NodeUuids)
 		err := ControllerKickNodesReq(cliUuid, nodeUuids)
 		if err != nil {
 			log.Printf("ControllerKickNode Error: %v", err)
@@ -395,7 +369,7 @@ func (srv *NodeCmdStreamServer) NodeCommandStream(stream pb.NodeCmdStream_NodeCo
 		}
 
 		var setupErr error
-		nodeUuid, setupErr = StoreChannel(in.NodeUuid, sendChan)
+		nodeUuid, setupErr = StoreNodeChannel(in.NodeUuid, sendChan)
 		if setupErr != nil {
 			log.Printf("setup error %v", setupErr)
 			cancelChan <- true
@@ -446,7 +420,7 @@ func listen(addr string, port int) error {
 	// create grpc server
 	srv := grpc.NewServer()
 	pb.RegisterNodeCmdStreamServer(srv, &NodeCmdStreamServer{})
-	//pb.RegisterCliCmdStreamServer(srv, &CliCmdStreamServer{})
+	pb.RegisterCliCmdStreamServer(srv, &CliCmdStreamServer{})
 
 	log.Printf("Controller listening on %s:%d", listenAddr, listenPort)
 	if err := srv.Serve(lis); err != nil {
