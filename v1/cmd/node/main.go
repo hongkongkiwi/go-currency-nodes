@@ -12,10 +12,10 @@ import (
 	"unicode/utf8"
 
 	"github.com/gofrs/uuid/v5"
-	helpers "github.com/hongkongkiwi/go-currency-nodes/internal/helpers"
-	nodeClient "github.com/hongkongkiwi/go-currency-nodes/internal/node_client"
-	nodePriceGen "github.com/hongkongkiwi/go-currency-nodes/internal/node_price_gen"
-	nodeServer "github.com/hongkongkiwi/go-currency-nodes/internal/node_server"
+	helpers "github.com/hongkongkiwi/go-currency-nodes/v1/internal/helpers"
+	nodeClient "github.com/hongkongkiwi/go-currency-nodes/v1/internal/node_client"
+	nodePriceGen "github.com/hongkongkiwi/go-currency-nodes/v1/internal/node_price_gen"
+	nodeServer "github.com/hongkongkiwi/go-currency-nodes/v1/internal/node_server"
 	"github.com/tebeka/atexit"
 	"github.com/urfave/cli/v2" // imports as package "cli"
 )

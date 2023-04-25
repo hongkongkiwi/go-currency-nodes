@@ -5,6 +5,7 @@ import (
 )
 
 type NodeCfgStruct struct {
+	StreamUpdates    bool
 	AppVersion       string
 	ControllerServer string
 	NodeUUID         *uuid.UUID
@@ -18,6 +19,7 @@ type CliCfgStruct struct {
 	AppVersion       string
 	ControllerServer string
 	CliUUID          *uuid.UUID
+	VerboseLog       bool
 }
 
 var ControllerCfg ControllerCfgStruct

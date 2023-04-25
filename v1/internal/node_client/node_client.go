@@ -13,9 +13,9 @@ import (
 	"sync"
 	"time"
 
-	pb "github.com/hongkongkiwi/go-currency-nodes/gen/pb"
-	helpers "github.com/hongkongkiwi/go-currency-nodes/internal/helpers"
-	nodePriceGen "github.com/hongkongkiwi/go-currency-nodes/internal/node_price_gen"
+	pb "github.com/hongkongkiwi/go-currency-nodes/v1/gen/pb"
+	helpers "github.com/hongkongkiwi/go-currency-nodes/v1/internal/helpers"
+	nodePriceGen "github.com/hongkongkiwi/go-currency-nodes/v1/internal/node_price_gen"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"

@@ -10,6 +10,7 @@ import (
 
 	"github.com/gofrs/uuid/v5"
 	pb "github.com/hongkongkiwi/go-currency-nodes/v2/gen/pb"
+	controllerCmds "github.com/hongkongkiwi/go-currency-nodes/v2/internal/controller_cmds"
 	helpers "github.com/hongkongkiwi/go-currency-nodes/v2/internal/helpers"
 	stores "github.com/hongkongkiwi/go-currency-nodes/v2/internal/stores"
 	"github.com/tebeka/atexit"
@@ -24,9 +25,6 @@ import (
 const listenAddr = "127.0.0.1"
 const listenPort = 5160
 
-var nodeChannelStore *stores.InMemoryUUIDStore
-var cliChannelStore *stores.InMemoryUUIDStore
-
 type ChannelCommandWrapper struct {
 	Cmd *anypb.Any
 }
@@ -40,7 +38,23 @@ type CliCmdStreamServer struct {
 }
 
 // Every incoming message has a UUID so store it alongside our send channel
-func StoreNodeChannel(uuidStr string, channel chan interface{}) (*uuid.UUID, error) {
+func storeNodeChannels(uuidStr string, sendChannel chan interface{}, cancelChannel chan bool) (*uuid.UUID, error) {
+	uuid, err := uuid.FromString(uuidStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid uuid cannot create channel")
+	}
+	if cancelChannel == nil {
+		return nil, fmt.Errorf("invalid cancelChannel passed")
+	}
+	stores.NodeCancelChannelStore.SetWithUUID(&uuid, cancelChannel)
+	if sendChannel == nil {
+		return nil, fmt.Errorf("invalid sendChannel passed")
+	}
+	stores.NodeSendChannelStore.SetWithUUID(&uuid, sendChannel)
+	return &uuid, nil
+}
+
+func storeCliChannel(uuidStr string, channel chan interface{}) (*uuid.UUID, error) {
 	uuid, err := uuid.FromString(uuidStr)
 	if err != nil {
 		return nil, fmt.Errorf("invalid uuid cannot create channel")
@@ -48,122 +62,8 @@ func StoreNodeChannel(uuidStr string, channel chan interface{}) (*uuid.UUID, err
 	if channel == nil {
 		return nil, fmt.Errorf("invalid channel passed")
 	}
-	nodeChannelStore.SetWithUUID(&uuid, channel)
+	stores.CliChannelStore.SetWithUUID(&uuid, channel)
 	return &uuid, nil
-}
-
-func StoreCliChannel(uuidStr string, channel chan interface{}) (*uuid.UUID, error) {
-	uuid, err := uuid.FromString(uuidStr)
-	if err != nil {
-		return nil, fmt.Errorf("invalid uuid cannot create channel")
-	}
-	if channel == nil {
-		return nil, fmt.Errorf("invalid channel passed")
-	}
-	cliChannelStore.SetWithUUID(&uuid, channel)
-	return &uuid, nil
-}
-
-// Function to send message over our node streaming channel
-func sendToNodes(toUUIDs []*uuid.UUID, fromUUID *uuid.UUID, command *anypb.Any) error {
-	if len(toUUIDs) == 0 {
-		return fmt.Errorf("must pass atleast one node uuid to send to")
-	}
-	if fromUUID == nil {
-		return fmt.Errorf("must pass from uuid")
-	}
-	for _, UUID := range toUUIDs {
-		if channel, _ := nodeChannelStore.GetFromUUID(UUID); channel != nil {
-			// Push our command to the appropriate channel
-			channel <- &pb.StreamToNode{
-				FromUuid: fromUUID.String(),
-				Command:  command,
-			}
-		} else {
-			log.Printf("WARNING: We do not know about UUID: %s ignoring", UUID)
-		}
-	}
-	return nil
-}
-
-// Function to send message over our cli streaming channel
-func sendToCli(toUUID *uuid.UUID, response *anypb.Any) error {
-	if toUUID == nil {
-		return fmt.Errorf("must pass cli uuid to send to")
-	}
-	if channel, _ := cliChannelStore.GetFromUUID(toUUID); channel != nil {
-		// Push our command to the appropriate channel
-		channel <- &pb.StreamToCli{
-			Response: response,
-		}
-	} else {
-		log.Printf("WARNING: We do not know about UUID: %s ignoring", toUUID)
-	}
-	return nil
-}
-
-func NodeAppVersionReq(toUUIDs []*uuid.UUID, fromUUID *uuid.UUID) error {
-	log.Printf("NodeAppVersionReq: %v", toUUIDs)
-	genericPb, err := anypb.New(&pb.NodeAppVersionReq{})
-	if err != nil {
-		return fmt.Errorf("unknown Protobuf Struct %v", err)
-	}
-	sendToNodes(toUUIDs, fromUUID, genericPb)
-	return nil
-}
-
-func NodeAppVersionReply(appVersionReply *pb.NodeAppVersionReply) error {
-	log.Printf("NodeAppVersionReply: %v", appVersionReply)
-	return nil
-}
-
-func NodeStatusReq(toUUIDs []*uuid.UUID, fromUUID *uuid.UUID) error {
-	log.Printf("NodeStatusReq: %v", toUUIDs)
-	genericPb, err := anypb.New(&pb.NodeAppVersionReq{})
-	if err != nil {
-		return fmt.Errorf("unknown Protobuf Struct %v", err)
-	}
-	sendToNodes(toUUIDs, fromUUID, genericPb)
-	return nil
-}
-
-func NodeStatusReply(statusReply *pb.NodeStatusReply) error {
-	log.Printf("NodeStatusReply: %v", statusReply)
-	return nil
-}
-
-func NodeUUIDReq(toUUIDs []*uuid.UUID, fromUUID *uuid.UUID) error {
-	log.Printf("NodeUUIDReq: %v", toUUIDs)
-	genericPb, err := anypb.New(&pb.NodeAppVersionReq{})
-	if err != nil {
-		return fmt.Errorf("unknown Protobuf Struct %v", err)
-	}
-	sendToNodes(toUUIDs, fromUUID, genericPb)
-	return nil
-}
-
-func NodeUUIDReply(uuidReply *pb.NodeUUIDReply) error {
-	log.Printf("NodeUUIDReply: %v", uuidReply)
-	return nil
-}
-
-func ControllerListNodesReq(cliUuid *uuid.UUID) error {
-	log.Printf("ControllerListNodes")
-	genericPb, err := anypb.New(&pb.ControllerListNodesReply{
-		NodeUuids: nodeChannelStore.KeysAsString(),
-	})
-	if err != nil {
-		return err
-	}
-	return sendToCli(cliUuid, genericPb)
-}
-
-func ControllerKickNodesReq(cliUuid *uuid.UUID, nodeUuids []*uuid.UUID) error {
-	log.Printf("ControllerKickNodes: %v", nodeUuids)
-	genericPb, _ := anypb.New(&pb.ControllerKickNodesReq{
-		NodeUuids: helpers.StringsFromUuids(nodeUuids),
-	})
-	return sendToCli(cliUuid, genericPb)
 }
 
 func contextError(ctx context.Context) error {
@@ -233,7 +133,7 @@ func (srv *CliCmdStreamServer) CliCommandStream(stream pb.CliCmdStream_CliComman
 			// Terminate the stream
 			cancelChan <- true
 			if cliUuid != nil {
-				cliChannelStore.DeleteUUID(cliUuid)
+				stores.CliChannelStore.DeleteUUID(cliUuid)
 			}
 			return nil
 		}
@@ -244,7 +144,7 @@ func (srv *CliCmdStreamServer) CliCommandStream(stream pb.CliCmdStream_CliComman
 			log.Println("exit (end of stream)")
 			cancelChan <- true
 			if cliUuid != nil {
-				cliChannelStore.DeleteUUID(cliUuid)
+				stores.CliChannelStore.DeleteUUID(cliUuid)
 			}
 			return nil
 		}
@@ -253,12 +153,12 @@ func (srv *CliCmdStreamServer) CliCommandStream(stream pb.CliCmdStream_CliComman
 			continue
 		}
 		var setupErr error
-		cliUuid, setupErr = StoreCliChannel(in.CliUuid, sendChan)
+		cliUuid, setupErr = storeCliChannel(in.CliUuid, sendChan)
 		if setupErr != nil {
 			log.Printf("setup error %v", setupErr)
 			cancelChan <- true
 			if cliUuid != nil {
-				cliChannelStore.DeleteUUID(cliUuid)
+				stores.CliChannelStore.DeleteUUID(cliUuid)
 			}
 			// Terminate stream
 			return nil
@@ -270,54 +170,8 @@ func (srv *CliCmdStreamServer) CliCommandStream(stream pb.CliCmdStream_CliComman
 					log.Printf("Cli UUID Error: %v", err)
 				}
 			}
-			handleCliCommand(in.NodeCommand, cliUuid, sendToUUIDs)
+			controllerCmds.HandleCliCommand(in.NodeCommand, cliUuid, sendToUUIDs)
 		}
-	}
-}
-
-func handleCliCommand(genericCmd *anypb.Any, cliUuid *uuid.UUID, sendToUUIDs []*uuid.UUID) {
-	// In this case, incoming messages are actually a reply
-	// (excluding initial command) so try to unmarshel it
-	cmd, unmrashalErr := genericCmd.UnmarshalNew()
-	if unmrashalErr != nil {
-		// We couldn't unmarshel a proper PB object
-		log.Printf("Cli Node Command Error: %v", unmrashalErr)
-		return
-	}
-	switch cmd := cmd.(type) {
-	case *pb.ControllerListNodesReq:
-		log.Printf("Cli Requested ControllerListNodes")
-		err := ControllerListNodesReq(cliUuid)
-		if err != nil {
-			log.Printf("ControllerListNodes Error: %v", err)
-		}
-	case *pb.ControllerKickNodesReq:
-		log.Printf("Cli Requested ControllerKickNode")
-		nodeUuids, _ := helpers.UuidsFromStrings(cmd.NodeUuids)
-		err := ControllerKickNodesReq(cliUuid, nodeUuids)
-		if err != nil {
-			log.Printf("ControllerKickNode Error: %v", err)
-		}
-	case *pb.NodeAppVersionReq:
-		log.Printf("Cli Requested NodeAppVersion")
-		err := NodeAppVersionReq(sendToUUIDs, cliUuid)
-		if err != nil {
-			log.Printf("NodeAppVersionReq Error: %v", err)
-		}
-	case *pb.NodeStatusReq:
-		log.Printf("Cli Requested NodeStatusReq")
-		err := NodeStatusReq(sendToUUIDs, cliUuid)
-		if err != nil {
-			log.Printf("NodeStatusReq Error: %v", err)
-		}
-	case *pb.NodeUUIDReq:
-		log.Printf("Cli Requested NodeUUIDReq")
-		err := NodeStatusReq(sendToUUIDs, cliUuid)
-		if err != nil {
-			log.Printf("NodeUUIDReq Error: %v", err)
-		}
-	default:
-		log.Printf("Unhandled Command: %v", cmd)
 	}
 }
 
@@ -347,7 +201,8 @@ func (srv *NodeCmdStreamServer) NodeCommandStream(stream pb.NodeCmdStream_NodeCo
 		if err != nil {
 			cancelChan <- true
 			if nodeUuid != nil {
-				nodeChannelStore.DeleteUUID(nodeUuid)
+				stores.NodeSendChannelStore.DeleteUUID(nodeUuid)
+				stores.NodeCancelChannelStore.DeleteUUID(nodeUuid)
 			}
 			// Terminate the stream
 			return nil
@@ -359,7 +214,8 @@ func (srv *NodeCmdStreamServer) NodeCommandStream(stream pb.NodeCmdStream_NodeCo
 			log.Println("exit (end of stream)")
 			cancelChan <- true
 			if nodeUuid != nil {
-				nodeChannelStore.DeleteUUID(nodeUuid)
+				stores.NodeSendChannelStore.DeleteUUID(nodeUuid)
+				stores.NodeCancelChannelStore.DeleteUUID(nodeUuid)
 			}
 			return nil
 		}
@@ -369,12 +225,13 @@ func (srv *NodeCmdStreamServer) NodeCommandStream(stream pb.NodeCmdStream_NodeCo
 		}
 
 		var setupErr error
-		nodeUuid, setupErr = StoreNodeChannel(in.NodeUuid, sendChan)
+		nodeUuid, setupErr = storeNodeChannels(in.NodeUuid, sendChan, cancelChan)
 		if setupErr != nil {
 			log.Printf("setup error %v", setupErr)
 			cancelChan <- true
 			if nodeUuid != nil {
-				nodeChannelStore.DeleteUUID(nodeUuid)
+				stores.NodeSendChannelStore.DeleteUUID(nodeUuid)
+				stores.NodeCancelChannelStore.DeleteUUID(nodeUuid)
 			}
 			// Terminate stream
 			return nil
@@ -395,7 +252,7 @@ func (srv *NodeCmdStreamServer) NodeCommandStream(stream pb.NodeCmdStream_NodeCo
 		}
 		log.Printf("Node sent %s", in)
 		if in.FromUuid != nil {
-			cliSendChannel, _ := cliChannelStore.GetFromUUID(&fromUuid)
+			cliSendChannel, _ := stores.CliChannelStore.GetFromUUID(&fromUuid)
 			if cliSendChannel != nil {
 				cliSendChannel <- &pb.StreamToCli{
 					NodeUuid: &in.NodeUuid,
@@ -414,8 +271,10 @@ func listen(addr string, port int) error {
 	}
 
 	// Init our internal channel stores
-	nodeChannelStore = stores.NewInMemoryUUIDStore()
-	cliChannelStore = stores.NewInMemoryUUIDStore()
+	stores.NodeSendChannelStore = stores.NewInMemoryUUIDChannelInterfaceStore()
+	stores.NodeCancelChannelStore = stores.NewInMemoryUUIDChannelBoolStore()
+	stores.CliChannelStore = stores.NewInMemoryUUIDChannelInterfaceStore()
+	controllerCmds.CliReplyCount = stores.NewCliReplyCount()
 
 	// create grpc server
 	srv := grpc.NewServer()

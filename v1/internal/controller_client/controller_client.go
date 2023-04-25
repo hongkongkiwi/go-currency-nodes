@@ -13,9 +13,9 @@ import (
 	"time"
 
 	"github.com/gofrs/uuid/v5"
-	pb "github.com/hongkongkiwi/go-currency-nodes/gen/pb"
-	cs "github.com/hongkongkiwi/go-currency-nodes/internal/controller_server"
-	helpers "github.com/hongkongkiwi/go-currency-nodes/internal/helpers"
+	pb "github.com/hongkongkiwi/go-currency-nodes/v1/gen/pb"
+	cs "github.com/hongkongkiwi/go-currency-nodes/v1/internal/controller_server"
+	helpers "github.com/hongkongkiwi/go-currency-nodes/v1/internal/helpers"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )

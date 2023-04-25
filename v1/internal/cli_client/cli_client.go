@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	pb "github.com/hongkongkiwi/go-currency-nodes/gen/pb" // imports as package "cli"
+	pb "github.com/hongkongkiwi/go-currency-nodes/v1/gen/pb" // imports as package "cli"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/encoding/protojson"

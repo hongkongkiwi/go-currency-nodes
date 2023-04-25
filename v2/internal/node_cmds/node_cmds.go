@@ -28,29 +28,36 @@ func sendToController(fromUuid string, response *anypb.Any) {
 	}
 }
 
-func NodeAppVersion(fromUuid string) {
+func nodeAppVersion(fromUuid string) {
 	genericPb, _ := anypb.New(&pb.NodeAppVersionReply{
 		NodeVersion: configs.NodeCfg.AppVersion,
 	})
 	sendToController(fromUuid, genericPb)
 }
 
-func NodeStatus(fromUuid string) {
+func nodeStatus(fromUuid string) {
 	genericPb, _ := anypb.New(&pb.NodeStatusReply{
 		NodeUuid:         configs.NodeCfg.NodeUUID.String(),
 		NodeVersion:      configs.NodeCfg.AppVersion,
 		ControllerServer: configs.NodeCfg.ControllerServer,
+		StreamUpdates:    configs.NodeCfg.StreamUpdates,
 	})
 	sendToController(fromUuid, genericPb)
 }
 
-func NodeUUID(fromUuid string) {
-	genericPb, _ := anypb.New(&pb.NodeUUIDReply{
-		NodeUuid: configs.NodeCfg.NodeUUID.String(),
-	})
+func nodeStartStream(fromUuid string) {
+	configs.NodeCfg.StreamUpdates = true
+	genericPb, _ := anypb.New(&pb.NodeStartStreamReply{})
 	sendToController(fromUuid, genericPb)
 }
 
+func nodeStopStream(fromUuid string) {
+	configs.NodeCfg.StreamUpdates = false
+	genericPb, _ := anypb.New(&pb.NodeStopStreamReply{})
+	sendToController(fromUuid, genericPb)
+}
+
+// Just an empty command to initiate the stream
 func ControllerHello() {
 	sendToController("", nil)
 }
@@ -65,13 +72,16 @@ func HandleIncomingCommand(fromUuid string, inCmd *anypb.Any) {
 	switch cmd := cmd.(type) {
 	case *pb.NodeAppVersionReq:
 		log.Printf("Command received NodeAppVersionReq")
-		NodeAppVersion(fromUuid)
+		nodeAppVersion(fromUuid)
 	case *pb.NodeStatusReq:
 		log.Printf("Command received NodeStatusReq")
-		NodeStatus(fromUuid)
-	case *pb.NodeUUIDReq:
-		log.Printf("Command received NodeUUIDReq")
-		NodeUUID(fromUuid)
+		nodeStatus(fromUuid)
+	case *pb.NodeStartStreamReq:
+		log.Printf("Command received NodeStartStreamReq")
+		nodeStartStream(fromUuid)
+	case *pb.NodeStopStreamReq:
+		log.Printf("Command received NodeStopStreamReq")
+		nodeStopStream(fromUuid)
 	default:
 		log.Printf("Unhandled Command: %v", cmd)
 	}

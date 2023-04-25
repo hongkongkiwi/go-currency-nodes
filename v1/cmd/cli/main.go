@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	cliClient "github.com/hongkongkiwi/go-currency-nodes/internal/cli_client"
+	cliClient "github.com/hongkongkiwi/go-currency-nodes/v1/internal/cli_client"
 	"github.com/urfave/cli/v2" // imports as package "cli"
 )
 

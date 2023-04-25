@@ -5,7 +5,7 @@ services:
   controller1:
     container_name: currency-controller1
     hostname: controller1
-    image: github.com/hongkongkiwi/go-currency-nodes/controller
+    image: github.com/hongkongkiwi/go-currency-nodes/v1/controller
     build:
       context: .
       dockerfile: ./docker/Dockerfile
@@ -27,7 +27,7 @@ services:
   node1:
     container_name: currency-node1
     hostname: currency-node1
-    image: github.com/hongkongkiwi/go-currency-nodes/node
+    image: github.com/hongkongkiwi/go-currency-nodes/v1/node
     build:
       context: .
       dockerfile: ./docker/Dockerfile
@@ -60,7 +60,7 @@ services:
   node2:
     container_name: currency-node2
     hostname: currency-node2
-    image: github.com/hongkongkiwi/go-currency-nodes/node
+    image: github.com/hongkongkiwi/go-currency-nodes/v1/node
     build:
       context: .
       dockerfile: ./docker/Dockerfile
@@ -86,7 +86,7 @@ services:
   node3:
     container_name: currency-node3
     hostname: currency-node3
-    image: github.com/hongkongkiwi/go-currency-nodes/node
+    image: github.com/hongkongkiwi/go-currency-nodes/v1/node
     build:
       context: .
       dockerfile: ./docker/Dockerfile

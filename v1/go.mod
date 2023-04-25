@@ -1,4 +1,4 @@
-module github.com/hongkongkiwi/go-currency-nodes
+module github.com/hongkongkiwi/go-currency-nodes/v1
 
 go 1.20
 

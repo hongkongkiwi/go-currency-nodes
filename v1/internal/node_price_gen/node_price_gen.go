@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	helpers "github.com/hongkongkiwi/go-currency-nodes/internal/helpers"
+	helpers "github.com/hongkongkiwi/go-currency-nodes/v1/internal/helpers"
 )
 
 var seedRand *rand.Rand

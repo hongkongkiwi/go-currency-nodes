@@ -15,8 +15,8 @@ import (
 	"time"
 
 	"github.com/gofrs/uuid/v5"
-	pb "github.com/hongkongkiwi/go-currency-nodes/gen/pb"
-	helpers "github.com/hongkongkiwi/go-currency-nodes/internal/helpers"
+	pb "github.com/hongkongkiwi/go-currency-nodes/v1/gen/pb"
+	helpers "github.com/hongkongkiwi/go-currency-nodes/v1/internal/helpers"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"

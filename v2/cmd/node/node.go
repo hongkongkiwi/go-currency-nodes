@@ -133,6 +133,7 @@ func main() {
 	configs.NodeCfg.NodeUUID = &nodeUuid
 	configs.NodeCfg.ControllerServer = fmt.Sprintf("%s:%d", controllerAddr, controllerPort)
 	configs.NodeCfg.AppVersion = appVersion
+	configs.NodeCfg.StreamUpdates = true
 
 	// Use backoff so we can have a configurable stratergy later for reconnections
 	b := backoff.NewConstantBackOff(4 * time.Second)

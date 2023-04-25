@@ -22,15 +22,18 @@ service CliCmdStream {
 
 // Send a single command to controller to foreward to one or more UUIDs
 message StreamFromCli {
-  string cli_uuid = 1; // CLI client uuid
-  repeated string node_uuids = 2; // List of node UUIDs to send to
-  optional google.protobuf.Any node_command = 3; // Command to send to node
+  string stream_uuid = 1; // Unique uuid to track this request
+  string cli_uuid = 2; // CLI client uuid to return back to
+  repeated string node_uuids = 3; // List of node UUIDs to send to
+  google.protobuf.Any node_command = 4; // Command to send to node
 }
 
 // What the controller sends a response to cli client
 message StreamToCli {
-  optional string node_uuid = 1; // Our node uuid
-  google.protobuf.Any response = 2;
+  string stream_uuid = 1; // Unique uuid to track this request
+  optional string node_uuid = 2; // Our node uuid
+  google.protobuf.Any response = 3;
+  uint32 reply_count = 4;
 }
 
 // What the node sends to controller
@@ -67,6 +70,7 @@ message NodeStatusReply {
   string node_name = 3; // friendly name of this node
   string node_version = 4; // app version of this node
   string controller_server = 5; // Where to initiate the stream connection
+  bool stream_updates = 6;
 }
 
 message NodeAppVersionReq {
@@ -77,13 +81,16 @@ message NodeAppVersionReply {
   string node_version = 1;
 }
 
-message NodeUUIDReq {
+message NodeStartStreamReq {
 }
 
-// rpc NodeUUID
-message NodeUUIDReply {
-  string node_uuid = 2;
-  string node_name = 3;
+message NodeStartStreamReply {
+}
+
+message NodeStopStreamReq {
+}
+
+message NodeStopStreamReply {
 }
 
 message ControllerListNodesReq {
@@ -98,4 +105,12 @@ message ControllerKickNodesReq {
 }
 
 message ControllerKickNodesReply {
+  repeated string kicked_node_uuids = 1;
+}
+
+message ControllerAppVersionReq {
+}
+
+message ControllerAppVersionReply {
+  string controller_app_version = 1;
 }

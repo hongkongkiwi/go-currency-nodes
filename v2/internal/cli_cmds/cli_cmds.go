@@ -4,20 +4,25 @@
 package cli_cmds
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/gofrs/uuid/v5"
 	pb "github.com/hongkongkiwi/go-currency-nodes/v2/gen/pb"
 	configs "github.com/hongkongkiwi/go-currency-nodes/v2/internal/configs"
 	"github.com/hongkongkiwi/go-currency-nodes/v2/internal/helpers"
+	"google.golang.org/protobuf/encoding/protojson"
 	anypb "google.golang.org/protobuf/types/known/anypb"
 )
 
 var SendChan chan *pb.StreamFromCli
+var CancelChan chan bool
 
 func sendToController(nodeUuids []*uuid.UUID, nodeCommand *anypb.Any) {
 	nodeUuidStrings := helpers.StringsFromUuids(nodeUuids)
+	streamUuid, _ := uuid.NewV4()
 	SendChan <- &pb.StreamFromCli{
+		StreamUuid:  streamUuid.String(),
 		NodeUuids:   nodeUuidStrings,
 		CliUuid:     configs.CliCfg.CliUUID.String(),
 		NodeCommand: nodeCommand,
@@ -29,14 +34,35 @@ func NodeAppVersion(nodeUuids []*uuid.UUID) {
 	sendToController(nodeUuids, genericPb)
 }
 
+func NodeAppVersionReply(nodeUuid *uuid.UUID, reply *pb.NodeAppVersionReply) {
+	fmt.Printf("Node App Version (%s): %s", nodeUuid.String(), reply.NodeVersion)
+}
+
 func NodeStatus(nodeUuids []*uuid.UUID) {
 	genericPb, _ := anypb.New(&pb.NodeStatusReq{})
 	sendToController(nodeUuids, genericPb)
 }
 
-func NodeUUID(nodeUuids []*uuid.UUID) {
-	genericPb, _ := anypb.New(&pb.NodeUUIDReply{})
+func NodeStatusReply(nodeUuid *uuid.UUID, reply *pb.NodeStatusReply) {
+	fmt.Printf("Node Status (%s): %v", nodeUuid.String(), protojson.Format(reply))
+}
+
+func NodeStartStream(nodeUuids []*uuid.UUID) {
+	genericPb, _ := anypb.New(&pb.NodeStartStreamReq{})
 	sendToController(nodeUuids, genericPb)
+}
+
+func NodeStartStreamReply(nodeUuid *uuid.UUID, reply *pb.NodeStartStreamReply) {
+	fmt.Printf("Node Start Stream (%s): OK", nodeUuid.String())
+}
+
+func NodeStopStream(nodeUuids []*uuid.UUID) {
+	genericPb, _ := anypb.New(&pb.NodeStopStreamReq{})
+	sendToController(nodeUuids, genericPb)
+}
+
+func NodeStopStreamReply(nodeUuid *uuid.UUID, reply *pb.NodeStopStreamReply) {
+	fmt.Printf("Node Stop Stream (%s): OK", nodeUuid.String())
 }
 
 func ControllerKickNodes(nodeUuids []*uuid.UUID) {
@@ -50,9 +76,29 @@ func ControllerKickNodes(nodeUuids []*uuid.UUID) {
 	sendToController(nil, genericPb)
 }
 
+func ControllerKickNodesReply(reply *pb.ControllerKickNodesReply) {
+	fmt.Printf("Controller Kicked Nodes: %v", reply.KickedNodeUuids)
+	CancelChan <- true
+}
+
 func ControllerListNodes() {
 	genericPb, _ := anypb.New(&pb.ControllerListNodesReq{})
 	sendToController(nil, genericPb)
+}
+
+func ControllerListNodesReply(reply *pb.ControllerListNodesReply) {
+	fmt.Printf("Controller Online Nodes: %v", reply.NodeUuids)
+	CancelChan <- true
+}
+
+func ControllerAppVersion() {
+	genericPb, _ := anypb.New(&pb.ControllerAppVersionReq{})
+	sendToController(nil, genericPb)
+}
+
+func ControllerAppVersionReply(reply *pb.ControllerAppVersionReply) {
+	fmt.Printf("Controller App Version: %s", reply.ControllerAppVersion)
+	CancelChan <- true
 }
 
 func HandleIncomingReply(in *pb.StreamToCli) {
@@ -65,17 +111,26 @@ func HandleIncomingReply(in *pb.StreamToCli) {
 		log.Printf("Command received Data Error: %v", unmrashalErr)
 		return
 	}
+	var nodeUuid uuid.UUID
+	if in.NodeUuid != nil {
+		nodeUuid, _ = uuid.FromString(*in.NodeUuid)
+	}
+	log.Printf("replycount: %d", in.ReplyCount)
 	switch reply := reply.(type) {
 	case *pb.NodeAppVersionReply:
-		log.Printf("Command response NodeAppVersionReply: %v", reply)
+		NodeAppVersionReply(&nodeUuid, reply)
 	case *pb.NodeStatusReply:
-		log.Printf("Command received NodeStatusReply: %v", reply)
-	case *pb.NodeUUIDReply:
-		log.Printf("Command received NodeUUIDReply: %v", reply)
+		NodeStatusReply(&nodeUuid, reply)
+	case *pb.NodeStartStreamReply:
+		NodeStartStreamReply(&nodeUuid, reply)
+	case *pb.NodeStopStreamReply:
+		NodeStopStreamReply(&nodeUuid, reply)
 	case *pb.ControllerKickNodesReply:
-		log.Printf("Command received ControllerKickNodesReply: %v", reply)
+		ControllerKickNodesReply(reply)
 	case *pb.ControllerListNodesReply:
-		log.Printf("Command received ControllerListNodesReply: %v", reply)
+		ControllerListNodesReply(reply)
+	case *pb.ControllerAppVersionReply:
+		ControllerAppVersionReply(reply)
 	default:
 		log.Printf("Unhandled Command: %v", reply)
 	}

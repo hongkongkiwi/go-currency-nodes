@@ -4,8 +4,8 @@ GO_BIN ?= go
 DOCKER_BIN := docker2
 BUILD_DIR ?= build
 # Hardcoded for now
-DOCKER_TAG := github.com/hongkongkiwi/go-currency-nodes
-GO_PKG := github.com/hongkongkiwi/go-currency-nodes
+DOCKER_TAG := github.com/hongkongkiwi/go-currency-nodes/v1
+GO_PKG := github.com/hongkongkiwi/go-currency-nodes/v1
 PROTO_INPUT_DIR := proto
 PROTO_OUTPUT_DIR := gen/pb
 DOCKER_INSTANCEDATA_DIR := ./docker/instancedata
@@ -51,7 +51,7 @@ build_docker: build_docker_cli build_docker_node build_docker_controller
 
 .PHONY: run_docker_node # Run docker iamge for node app
 run_docker_node: check_docker
-	docker run --rm -it github.com/hongkongkiwi/go-currency-nodes/node
+	docker run --rm -it github.com/hongkongkiwi/go-currency-nodes/v1/node
 
 .PHONY: build_docker_node # Build docker iamge for node app
 build_docker_node: check_docker
@@ -59,7 +59,7 @@ build_docker_node: check_docker
 
 .PHONY: run_docker_controller # Run docker iamge for controller app
 run_docker_controller: check_docker
-	docker run --rm -it github.com/hongkongkiwi/go-currency-nodes/controller
+	docker run --rm -it github.com/hongkongkiwi/go-currency-nodes/v1/controller
 
 .PHONY: build_docker_controller # Build docker iamge for controller app
 build_docker_controller: check_docker

@@ -8,9 +8,9 @@ import (
 	"sync"
 	"syscall"
 
-	controllerClient "github.com/hongkongkiwi/go-currency-nodes/internal/controller_client"
-	controllerServer "github.com/hongkongkiwi/go-currency-nodes/internal/controller_server"
-	helpers "github.com/hongkongkiwi/go-currency-nodes/internal/helpers"
+	controllerClient "github.com/hongkongkiwi/go-currency-nodes/v1/internal/controller_client"
+	controllerServer "github.com/hongkongkiwi/go-currency-nodes/v1/internal/controller_server"
+	helpers "github.com/hongkongkiwi/go-currency-nodes/v1/internal/helpers"
 	"github.com/tebeka/atexit"
 	"github.com/urfave/cli/v2" // imports as package "cli"
 )
