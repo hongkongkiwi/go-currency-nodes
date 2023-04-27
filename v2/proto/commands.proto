@@ -2,115 +2,127 @@ syntax = "proto3";
 package protobuf;
 
 // import "google/protobuf/empty.proto";
-// import "google/protobuf/timestamp.proto";
-// import "google/protobuf/timestamp.proto";
+import "google/protobuf/timestamp.proto";
 import "google/protobuf/any.proto";
 // import "currency_helpers.proto";
 
 option go_package = "./";
 
-// Node initiates one stream of responses
 service NodeCmdStream {
-  // Node sends responses to controller in resonse to commands sent
+  // Node initiates command stream to controller
   rpc NodeCommandStream (stream StreamFromNode) returns (stream StreamToNode) {}
 }
 
+
 service CliCmdStream {
-  // Cli sends messages to controller which are passed on to one or more nodes
+  // Cli initiates command stream to controller
   rpc CliCommandStream (stream StreamFromCli) returns (stream StreamToCli) {}
 }
 
 // Send a single command to controller to foreward to one or more UUIDs
 message StreamFromCli {
-  string stream_uuid = 1; // Unique uuid to track this request
-  string cli_uuid = 2; // CLI client uuid to return back to
-  repeated string node_uuids = 3; // List of node UUIDs to send to
-  google.protobuf.Any node_command = 4; // Command to send to node
+  string cli_uuid = 1; // CLI client uuid to return back to
+  repeated string node_uuids = 2; // List of node UUIDs to send to
+  google.protobuf.Any command = 3; // Command to send to node
 }
 
-// What the controller sends a response to cli client
+// Controller sends this back to the Cli
 message StreamToCli {
-  string stream_uuid = 1; // Unique uuid to track this request
   optional string node_uuid = 2; // Our node uuid
   google.protobuf.Any response = 3;
-  uint32 reply_count = 4;
 }
 
 // What the node sends to controller
 message StreamFromNode {
   string node_uuid = 1; // Our node uuid
   optional string from_uuid = 2; // Cli client uuid
-  optional google.protobuf.Any response = 3;
+  google.protobuf.Any response = 3;
 }
 
 // What the controller sends to node
 message StreamToNode {
-  string from_uuid = 1; // Pass this so the command gets sent back to right cli client
+  optional string from_uuid = 1; // Pass this so the command gets sent back to right cli client
   google.protobuf.Any command = 2;
 }
 
-message CommandPlugin {
-  string plugin_name = 1;
-  string plugin_version = 2;
+// Sent when an unknown command is sent
+message UnknownCommandV1Notify {
+  google.protobuf.Any command = 1;
 }
 
-message NodeSetupSetupReq {
+message CurrencyStreamStateV1 {
+  enum StreamState {
+    StreamUnknown = 0;
+    StreamStart = 1;
+    StreamStop = 2;
+  }
+  string currency_pair = 1;
+  StreamState stream_state = 2;
+  // These are used to communicate the latest prices (if any) from server to node
+  optional double latest_price = 3;
+  optional google.protobuf.Timestamp latest_price_updated_at = 4;
 }
 
-message NodeSetupSetupReply {
-  string uuid = 1;
-  repeated CommandPlugin supported_plugins = 2; // Server responds with plugins supported
+message NodeKnownCurrenciesV1Notify {
+  repeated string known_currency_pairs = 1;
 }
 
-message NodeStatusReq {
+message NodePriceUpdateV1Notify {
+  string currency_pair = 1;
+  double price = 2;
+  google.protobuf.Timestamp price_updated_at = 3;
 }
 
-message NodeStatusReply {
-  string node_uuid = 2; // uuid of this node
-  string node_name = 3; // friendly name of this node
-  string node_version = 4; // app version of this node
-  string controller_server = 5; // Where to initiate the stream connection
-  bool stream_updates = 6;
+message NodeStreamModifyStateV1Req {
+  repeated CurrencyStreamStateV1 stream_states = 1;
 }
 
-message NodeAppVersionReq {
+message NodeStreamModifyStateV1Reply {
 }
 
-// rpc NodeVersion
-message NodeAppVersionReply {
-  string node_version = 1;
+message NodeStatusV1Req {
 }
 
-message NodeStartStreamReq {
+message NodeStatusV1Reply {
+  string app_version = 1; // app version of this node
+  string connected_controller_server = 2; // Where to initiate the stream connection
+  google.protobuf.Timestamp connected_at = 3;
+  repeated CurrencyStreamStateV1 stream_states = 4;
+  message NodeConfig {
+    string uuid = 1;
+    string name = 2; // friendly name of this node
+    bool verbose_log = 3;
+    // List of servers the node will randomly connect to upon boot
+    repeated string controller_servers = 4;
+  }
+  NodeConfig config = 5;
 }
 
-message NodeStartStreamReply {
+message NodeShutdownV1Req {
 }
 
-message NodeStopStreamReq {
+message NodeShutdownV1Reply {
+  google.protobuf.Timestamp shutdown_at = 1;
 }
 
-message NodeStopStreamReply {
+message ControllerListNodesV1Req {
 }
 
-message ControllerListNodesReq {
-}
-
-message ControllerListNodesReply {
+message ControllerListNodesV1Reply {
   repeated string node_uuids = 1;
 }
 
-message ControllerKickNodesReq {
+message ControllerKickNodesV1Req {
   repeated string node_uuids = 1;
 }
 
-message ControllerKickNodesReply {
+message ControllerKickNodesV1Reply {
   repeated string kicked_node_uuids = 1;
 }
 
-message ControllerAppVersionReq {
+message ControllerAppVersionV1Req {
 }
 
-message ControllerAppVersionReply {
+message ControllerAppVersionV1Reply {
   string controller_app_version = 1;
 }

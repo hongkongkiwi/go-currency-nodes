@@ -1,0 +1,67 @@
+version: '3.7'
+services:
+  # In theory you can have multiple controllers as long as they share the db
+  # this is not tested
+  controller1:
+    container_name: currency-controller1
+    hostname: controller1
+    image: github.com/hongkongkiwi/go-currency-nodes/v2/controller
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile
+      args:
+        - "APP_NAME=controller"
+    ports:
+      - 127.0.0.1:5160:5160
+    expose:
+      - 5160
+    environment:
+      - "CONTROLLER_LISTEN_ADDR=0.0.0.0:5160"
+    command: start
+  # This node transmits updates automatically
+  node1:
+    container_name: currency-node1
+    hostname: node1
+    image: github.com/hongkongkiwi/go-currency-nodes/v2/node
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile
+      args:
+        - "APP_NAME=node"
+    environment:
+      - "NODE_CONTROLLER_ADDR=controller1:5160"
+      - "NODE_UUID=1ed2ebd8-6fc9-46f7-a156-6b9d9bff4982"
+      - "NODE_CURRENCY_PAIRS=USD_HKD,HKD_USD,USD_NZD,NZD_USD,BTC_HKD,HKD_BTC,BTC_USD,USD_BTC"
+    command: start
+    networks:
+      - default
+  node2:
+    container_name: currency-node2
+    hostname: node2
+    image: github.com/hongkongkiwi/go-currency-nodes/v2/node
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile
+      args:
+        - "APP_NAME=node"
+    environment:
+      - "NODE_CONTROLLER_ADDR=controller1:5160"
+      - "NODE_CURRENCY_PAIRS=USD_HKD,HKD_USD,USD_NZD,NZD_USD,BTC_HKD,HKD_BTC,BTC_USD,USD_BTC"
+    command: start
+    networks:
+      - default
+  node3:
+    container_name: currency-node3
+    hostname: node3
+    image: github.com/hongkongkiwi/go-currency-nodes/v2/node
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile
+      args:
+        - "APP_NAME=node"
+    environment:
+      - "NODE_CONTROLLER_ADDR=controller1:5160"
+      - "NODE_CURRENCY_PAIRS=USD_HKD,HKD_USD,USD_NZD,NZD_USD,BTC_HKD,HKD_BTC,BTC_USD,USD_BTC"
+    command: start
+    networks:
+      - default

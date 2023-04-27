@@ -18,7 +18,7 @@ check_deps: check_go check_docker check_protoc
 
 .PHONY: check_protoc
 check_protoc:
-	@command -v protoc >/dev/null 2>&1 || (echo >&2 "ERROR: protoc is required."; exit 1)
+	@command -v $(PROTOC_BIN) >/dev/null 2>&1 || (echo >&2 "ERROR: protoc is required."; exit 1)
 
 .PHONY: check_go
 check_go:
@@ -35,7 +35,7 @@ gen: proto_gen
 proto_gen: check_protoc
 	@mkdir -p $(PROTO_OUTPUT_DIR)
 	@rm -Rf $(PROTO_OUTPUT_DIR)/*
-	protoc --proto_path=./$(PROTO_INPUT_DIR) $(PROTO_INPUT_DIR)/*.proto --go_out=:$(PROTO_OUTPUT_DIR) --go-grpc_out=:$(PROTO_OUTPUT_DIR)
+	$(PROTOC_BIN) --experimental_allow_proto3_optional --proto_path=./$(PROTO_INPUT_DIR) $(PROTO_INPUT_DIR)/*.proto --go_out=:$(PROTO_OUTPUT_DIR) --go-grpc_out=:$(PROTO_OUTPUT_DIR)
 
 .PHONY: cli
 cli: build_cli

@@ -6,14 +6,16 @@ import (
 	"io"
 	"log"
 	"net"
-	"time"
+	"os"
 
 	"github.com/gofrs/uuid/v5"
 	pb "github.com/hongkongkiwi/go-currency-nodes/v2/gen/pb"
+	"github.com/hongkongkiwi/go-currency-nodes/v2/internal/configs"
 	controllerCmds "github.com/hongkongkiwi/go-currency-nodes/v2/internal/controller_cmds"
 	helpers "github.com/hongkongkiwi/go-currency-nodes/v2/internal/helpers"
 	stores "github.com/hongkongkiwi/go-currency-nodes/v2/internal/stores"
 	"github.com/tebeka/atexit"
+	"github.com/urfave/cli/v2"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -21,9 +23,6 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 	// "github.com/tebeka/atexit"
 )
-
-const listenAddr = "127.0.0.1"
-const listenPort = 5160
 
 type ChannelCommandWrapper struct {
 	Cmd *anypb.Any
@@ -69,19 +68,12 @@ func storeCliChannel(uuidStr string, channel chan interface{}) (*uuid.UUID, erro
 func contextError(ctx context.Context) error {
 	switch ctx.Err() {
 	case context.Canceled:
-		return logError(status.Error(codes.Canceled, "request is canceled"))
+		return status.Error(codes.Canceled, "request is canceled")
 	case context.DeadlineExceeded:
-		return logError(status.Error(codes.DeadlineExceeded, "deadline is exceeded"))
+		return status.Error(codes.DeadlineExceeded, "deadline is exceeded")
 	default:
 		return nil
 	}
-}
-
-func logError(err error) error {
-	if err != nil {
-		log.Print(err)
-	}
-	return err
 }
 
 func sendNodeThread(stream pb.NodeCmdStream_NodeCommandStreamServer, sendChan <-chan interface{}, cancelChan <-chan bool) {
@@ -163,14 +155,14 @@ func (srv *CliCmdStreamServer) CliCommandStream(stream pb.CliCmdStream_CliComman
 			// Terminate stream
 			return nil
 		}
-		if in.NodeCommand != nil {
+		if in.Command != nil {
 			sendToUUIDs, errs := helpers.UuidsFromStrings(in.NodeUuids)
 			if len(errs) > 0 {
 				for err := range errs {
 					log.Printf("Cli UUID Error: %v", err)
 				}
 			}
-			controllerCmds.HandleCliCommand(in.NodeCommand, cliUuid, sendToUUIDs)
+			controllerCmds.HandleIncomingCliCommand(in.Command, cliUuid, sendToUUIDs)
 		}
 	}
 }
@@ -178,81 +170,74 @@ func (srv *CliCmdStreamServer) CliCommandStream(stream pb.CliCmdStream_CliComman
 func (srv *NodeCmdStreamServer) NodeCommandStream(stream pb.NodeCmdStream_NodeCommandStreamServer) error {
 	sendChan := make(chan interface{})
 	cancelChan := make(chan bool)
+
 	go sendNodeThread(stream, sendChan, cancelChan)
-
-	timerChan := time.After(5 * time.Second)
-
-	go func() {
-		for {
-			<-timerChan
-			genericCmd, _ := anypb.New(&pb.NodeAppVersionReq{})
-			from, _ := uuid.NewV4()
-			sendChan <- &pb.StreamToNode{
-				FromUuid: from.String(),
-				Command:  genericCmd,
-			}
-			timerChan = time.After(5 * time.Second)
-		}
-	}()
 
 	var nodeUuid *uuid.UUID
 	for {
+		// Handle Stream Error
 		err := contextError(stream.Context())
 		if err != nil {
 			cancelChan <- true
 			if nodeUuid != nil {
 				stores.NodeSendChannelStore.DeleteUUID(nodeUuid)
 				stores.NodeCancelChannelStore.DeleteUUID(nodeUuid)
+				controllerCmds.HandleNodeDisconnected(nodeUuid)
 			}
 			// Terminate the stream
-			return nil
+			return err
 		}
+
 		// receive data from stream
 		in, err := stream.Recv()
 		if err == io.EOF {
 			// return will close stream from server side
-			log.Println("exit (end of stream)")
 			cancelChan <- true
 			if nodeUuid != nil {
 				stores.NodeSendChannelStore.DeleteUUID(nodeUuid)
 				stores.NodeCancelChannelStore.DeleteUUID(nodeUuid)
+				controllerCmds.HandleNodeDisconnected(nodeUuid)
 			}
-			return nil
+			return fmt.Errorf("exit (end of stream)")
 		}
 		if err != nil {
-			log.Printf("receive error %v", err)
 			continue
 		}
 
 		var setupErr error
 		nodeUuid, setupErr = storeNodeChannels(in.NodeUuid, sendChan, cancelChan)
 		if setupErr != nil {
-			log.Printf("setup error %v", setupErr)
 			cancelChan <- true
 			if nodeUuid != nil {
 				stores.NodeSendChannelStore.DeleteUUID(nodeUuid)
 				stores.NodeCancelChannelStore.DeleteUUID(nodeUuid)
+				controllerCmds.HandleNodeDisconnected(nodeUuid)
 			}
 			// Terminate stream
-			return nil
+			return fmt.Errorf("setup error %v", setupErr)
 		}
 
+		// Differentiate messages from node depending on if there is a fromUuid
 		var fromUuid uuid.UUID
 		if in.FromUuid != nil {
 			var err error
 			fromUuid, err = uuid.FromString(*in.FromUuid)
 			if err != nil {
-				log.Printf("node sent invalid uuid: %s", *in.FromUuid)
+				log.Printf("WARN: node sent invalid uuid: %s", *in.FromUuid)
 				continue
 			}
 		}
 		if in.Response == nil {
-			log.Printf("Node %s opened stream", in.NodeUuid)
+			log.Printf("Node %s sent empty message", in.NodeUuid)
 			continue
 		}
+
 		log.Printf("Node sent %s", in)
-		if in.FromUuid != nil {
+		if in.FromUuid == nil { // This is a command from Node to Controller
+			controllerCmds.HandleIncomingNodeCommandToController(in.Response, nodeUuid)
+		} else { // This Command is from Node to Cli so just forward
 			cliSendChannel, _ := stores.CliChannelStore.GetFromUUID(&fromUuid)
+			// Only send if we have a send channel to Cli
 			if cliSendChannel != nil {
 				cliSendChannel <- &pb.StreamToCli{
 					NodeUuid: &in.NodeUuid,
@@ -263,9 +248,14 @@ func (srv *NodeCmdStreamServer) NodeCommandStream(stream pb.NodeCmdStream_NodeCo
 	}
 }
 
-func listen(addr string, port int) error {
+func controllerVersion() error {
+	fmt.Printf("Controller Version: %s", configs.ControllerAppVersion)
+	return nil
+}
+
+func controllerStart(listenAddress string) error {
 	// create listener
-	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", listenAddr, listenPort))
+	lis, err := net.Listen("tcp", listenAddress)
 	if err != nil {
 		return fmt.Errorf("failed to listen: %v", err)
 	}
@@ -274,22 +264,76 @@ func listen(addr string, port int) error {
 	stores.NodeSendChannelStore = stores.NewInMemoryUUIDChannelInterfaceStore()
 	stores.NodeCancelChannelStore = stores.NewInMemoryUUIDChannelBoolStore()
 	stores.CliChannelStore = stores.NewInMemoryUUIDChannelInterfaceStore()
-	controllerCmds.CliReplyCount = stores.NewCliReplyCount()
+	stores.ControllerNodeCurrencies = stores.NewNodeCurrenciesStore()
+	stores.ControllerPriceStore = stores.NewPriceStore()
 
 	// create grpc server
 	srv := grpc.NewServer()
 	pb.RegisterNodeCmdStreamServer(srv, &NodeCmdStreamServer{})
 	pb.RegisterCliCmdStreamServer(srv, &CliCmdStreamServer{})
 
-	log.Printf("Controller listening on %s:%d", listenAddr, listenPort)
+	log.Printf("Controller listening on %s", listenAddress)
 	if err := srv.Serve(lis); err != nil {
 		return fmt.Errorf("failed to serve controller: %v", err)
 	}
 	return nil
 }
 
+func handleArgs(cCtx *cli.Context) error {
+	var err error
+	configs.ControllerCfg, err = configs.NewControllerCfgFromArgs(cCtx)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func main() {
-	if err := listen(listenAddr, listenPort); err != nil {
-		atexit.Fatal(err)
+	app := &cli.App{
+		Flags: []cli.Flag{
+			&cli.UintFlag{
+				Name:    configs.ArgControllerCncurrentNodePriceStreams,
+				Value:   configs.DefaultControllerCncurrentNodePriceStreams,
+				EnvVars: configs.ArgEnvControllerCncurrentNodePriceStreams[:],
+				Usage:   "maximum number of automatic currency streams",
+			},
+			&cli.BoolFlag{
+				Name:    configs.ArgControllerFlagVerbose,
+				Value:   configs.DefaultControllerVerboseLog,
+				EnvVars: configs.ArgEnvControllerVerbose[:],
+				Usage:   "turn on verbose logging",
+			},
+			&cli.StringFlag{
+				Name:    configs.ArgControllerFlagListenAddress,
+				Value:   configs.DefaultControllerListenAddress,
+				EnvVars: configs.ArgEnvControllerListenAddress[:],
+				Usage:   "local address to listen on",
+			},
+		},
+		Commands: []*cli.Command{
+			{
+				Name:    "version",
+				Aliases: []string{"v"},
+				Usage:   "display controller app version",
+				Action: func(cCtx *cli.Context) error {
+					return controllerVersion()
+				},
+			},
+			{
+				Name:    "start",
+				Aliases: []string{"v"},
+				Usage:   "start this node",
+				Action: func(cCtx *cli.Context) error {
+					if err := handleArgs(cCtx); err != nil {
+						return err
+					}
+					return controllerStart(configs.ControllerCfg.ListenAddress)
+				},
+			},
+		},
+	}
+
+	if err := app.Run(os.Args); err != nil {
+		atexit.Fatalf("ERROR: %v", err)
 	}
 }

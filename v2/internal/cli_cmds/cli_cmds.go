@@ -20,83 +20,58 @@ var CancelChan chan bool
 
 func sendToController(nodeUuids []*uuid.UUID, nodeCommand *anypb.Any) {
 	nodeUuidStrings := helpers.StringsFromUuids(nodeUuids)
-	streamUuid, _ := uuid.NewV4()
 	SendChan <- &pb.StreamFromCli{
-		StreamUuid:  streamUuid.String(),
-		NodeUuids:   nodeUuidStrings,
-		CliUuid:     configs.CliCfg.CliUUID.String(),
-		NodeCommand: nodeCommand,
+		NodeUuids: nodeUuidStrings,
+		CliUuid:   configs.CliCfg.UUID().String(),
+		Command:   nodeCommand,
 	}
 }
 
-func NodeAppVersion(nodeUuids []*uuid.UUID) {
-	genericPb, _ := anypb.New(&pb.NodeAppVersionReply{})
+func NodeStatusV1Req(nodeUuids []*uuid.UUID) {
+	genericPb, _ := anypb.New(&pb.NodeStatusV1Req{})
 	sendToController(nodeUuids, genericPb)
 }
 
-func NodeAppVersionReply(nodeUuid *uuid.UUID, reply *pb.NodeAppVersionReply) {
-	fmt.Printf("Node App Version (%s): %s", nodeUuid.String(), reply.NodeVersion)
-}
-
-func NodeStatus(nodeUuids []*uuid.UUID) {
-	genericPb, _ := anypb.New(&pb.NodeStatusReq{})
-	sendToController(nodeUuids, genericPb)
-}
-
-func NodeStatusReply(nodeUuid *uuid.UUID, reply *pb.NodeStatusReply) {
+func NodeStatusV1Reply(nodeUuid *uuid.UUID, reply *pb.NodeStatusV1Reply) {
 	fmt.Printf("Node Status (%s): %v", nodeUuid.String(), protojson.Format(reply))
 }
 
-func NodeStartStream(nodeUuids []*uuid.UUID) {
-	genericPb, _ := anypb.New(&pb.NodeStartStreamReq{})
-	sendToController(nodeUuids, genericPb)
+func NodeShutdownV1Reply(nodeUuid *uuid.UUID, reply *pb.NodeShutdownV1Reply) {
+	fmt.Printf("Node Shutdown Reply (%s): OK", nodeUuid.String())
 }
 
-func NodeStartStreamReply(nodeUuid *uuid.UUID, reply *pb.NodeStartStreamReply) {
-	fmt.Printf("Node Start Stream (%s): OK", nodeUuid.String())
-}
-
-func NodeStopStream(nodeUuids []*uuid.UUID) {
-	genericPb, _ := anypb.New(&pb.NodeStopStreamReq{})
-	sendToController(nodeUuids, genericPb)
-}
-
-func NodeStopStreamReply(nodeUuid *uuid.UUID, reply *pb.NodeStopStreamReply) {
-	fmt.Printf("Node Stop Stream (%s): OK", nodeUuid.String())
-}
-
-func ControllerKickNodes(nodeUuids []*uuid.UUID) {
+func ControllerKickNodesV1Req(nodeUuids []*uuid.UUID) {
 	if len(nodeUuids) == 0 {
 		return
 	}
 	nodeUuidStrings := helpers.StringsFromUuids(nodeUuids)
-	genericPb, _ := anypb.New(&pb.ControllerKickNodesReq{
+	genericPb, _ := anypb.New(&pb.ControllerKickNodesV1Req{
 		NodeUuids: nodeUuidStrings,
 	})
 	sendToController(nil, genericPb)
 }
 
-func ControllerKickNodesReply(reply *pb.ControllerKickNodesReply) {
+func ControllerKickNodesV1Reply(reply *pb.ControllerKickNodesV1Reply) {
 	fmt.Printf("Controller Kicked Nodes: %v", reply.KickedNodeUuids)
 	CancelChan <- true
 }
 
-func ControllerListNodes() {
-	genericPb, _ := anypb.New(&pb.ControllerListNodesReq{})
+func ControllerListNodesV1Req() {
+	genericPb, _ := anypb.New(&pb.ControllerListNodesV1Req{})
 	sendToController(nil, genericPb)
 }
 
-func ControllerListNodesReply(reply *pb.ControllerListNodesReply) {
+func ControllerListNodesV1Reply(reply *pb.ControllerListNodesV1Reply) {
 	fmt.Printf("Controller Online Nodes: %v", reply.NodeUuids)
 	CancelChan <- true
 }
 
-func ControllerAppVersion() {
-	genericPb, _ := anypb.New(&pb.ControllerAppVersionReq{})
+func ControllerAppVersionV1Req() {
+	genericPb, _ := anypb.New(&pb.ControllerAppVersionV1Req{})
 	sendToController(nil, genericPb)
 }
 
-func ControllerAppVersionReply(reply *pb.ControllerAppVersionReply) {
+func ControllerAppVersionV1Reply(reply *pb.ControllerAppVersionV1Reply) {
 	fmt.Printf("Controller App Version: %s", reply.ControllerAppVersion)
 	CancelChan <- true
 }
@@ -115,22 +90,17 @@ func HandleIncomingReply(in *pb.StreamToCli) {
 	if in.NodeUuid != nil {
 		nodeUuid, _ = uuid.FromString(*in.NodeUuid)
 	}
-	log.Printf("replycount: %d", in.ReplyCount)
 	switch reply := reply.(type) {
-	case *pb.NodeAppVersionReply:
-		NodeAppVersionReply(&nodeUuid, reply)
-	case *pb.NodeStatusReply:
-		NodeStatusReply(&nodeUuid, reply)
-	case *pb.NodeStartStreamReply:
-		NodeStartStreamReply(&nodeUuid, reply)
-	case *pb.NodeStopStreamReply:
-		NodeStopStreamReply(&nodeUuid, reply)
-	case *pb.ControllerKickNodesReply:
-		ControllerKickNodesReply(reply)
-	case *pb.ControllerListNodesReply:
-		ControllerListNodesReply(reply)
-	case *pb.ControllerAppVersionReply:
-		ControllerAppVersionReply(reply)
+	case *pb.NodeShutdownV1Reply:
+		NodeShutdownV1Reply(&nodeUuid, reply)
+	case *pb.NodeStatusV1Reply:
+		NodeStatusV1Reply(&nodeUuid, reply)
+	case *pb.ControllerKickNodesV1Reply:
+		ControllerKickNodesV1Reply(reply)
+	case *pb.ControllerListNodesV1Reply:
+		ControllerListNodesV1Reply(reply)
+	case *pb.ControllerAppVersionV1Reply:
+		ControllerAppVersionV1Reply(reply)
 	default:
 		log.Printf("Unhandled Command: %v", reply)
 	}

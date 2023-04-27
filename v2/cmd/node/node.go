@@ -5,47 +5,76 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
+	"os"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/gofrs/uuid/v5"
 	pb "github.com/hongkongkiwi/go-currency-nodes/v2/gen/pb"
 	"github.com/tebeka/atexit"
+	"github.com/urfave/cli/v2"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 
 	configs "github.com/hongkongkiwi/go-currency-nodes/v2/internal/configs"
 	nodeCmds "github.com/hongkongkiwi/go-currency-nodes/v2/internal/node_cmds"
 )
 
-const controllerAddr = "127.0.0.1"
-const controllerPort = 5160
-const appVersion = "0.0.1"
-
-var nodeUuid uuid.UUID
-var controllerServer string
 var ticker *backoff.Ticker
 
-func connectController(controllerAddr string, controllerPort int) {
+var seededRand *rand.Rand
 
-	// var retryPolicy = `{
-	// 		"methodConfig": [{
-	// 				// config per method or all methods under service
-	// 				"name": [{"service": "grpc.examples.echo.Echo"}],
-	// 				"waitForReady": true,
+func nodeLocalVersion() error {
+	fmt.Printf("Node Version: %s", configs.NodeAppVersion)
+	return nil
+}
 
-	// 				"retryPolicy": {
-	// 						"MaxAttempts": 4,
-	// 						"InitialBackoff": ".01s",
-	// 						"MaxBackoff": ".01s",
-	// 						"BackoffMultiplier": 1.0,
-	// 						// this value is grpc code
-	// 						"RetryableStatusCodes": [ "UNAVAILABLE" ]
-	// 				}
-	// 		}]
-	// }`
+func handleArgs(cCtx *cli.Context) error {
+	var err error
+	if configs.NodeCfg, err = configs.NewNodeCfgFromArgs(cCtx); err != nil {
+		return err
+	}
+	return nil
+}
 
-	controllerServer = fmt.Sprintf("%s:%d", controllerAddr, controllerPort)
+func nodeStart() error {
+	// var err error
+	// nodeUuid, err = uuid.NewV4()
+	// if err != nil {
+	// 	atexit.Fatalln(err)
+	// }
+	// configs.NodeCfg.SetUUID(&nodeUuid)
+	// configs.NodeCfg.ControllerServers = [1]string{fmt.Sprintf("%s:%d", controllerAddr, controllerPort)}
+
+	// Use backoff so we can have a configurable stratergy later for reconnections
+	// For this demo just use a constant backoff
+	b := backoff.NewConstantBackOff(4 * time.Second)
+	for {
+		if ticker == nil {
+			ticker = backoff.NewTicker(b)
+		}
+		<-ticker.C
+		// Attempt to connect
+		n := seededRand.Int() % len(configs.NodeCfg.ControllerServers)
+		connectController(configs.NodeCfg.ControllerServers[n])
+	}
+}
+
+func contextError(ctx context.Context) error {
+	switch ctx.Err() {
+	case context.Canceled:
+		return status.Error(codes.Canceled, "request is canceled")
+	case context.DeadlineExceeded:
+		return status.Error(codes.DeadlineExceeded, "deadline is exceeded")
+	default:
+		return nil
+	}
+}
+
+func connectController(controllerServer string) {
 	conn, err := grpc.Dial(
 		controllerServer,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -53,6 +82,9 @@ func connectController(controllerAddr string, controllerPort int) {
 	)
 	if err != nil {
 		log.Printf("ERROR can not connect with server %v", err)
+		if conn != nil {
+			conn.Close()
+		}
 		return
 	}
 
@@ -61,87 +93,148 @@ func connectController(controllerAddr string, controllerPort int) {
 	stream, err := client.NodeCommandStream(context.Background())
 	if err != nil {
 		log.Printf("ERROR openn stream error %v", err)
+		// Probably unnecessary
+		if conn != nil {
+			conn.Close()
+		}
 		return
 	}
 
 	// We are connected close the ticker
-	ticker.Stop()
-	ticker = nil
+	if ticker != nil {
+		ticker.Stop()
+		ticker = nil
+	}
+
+	// Do so pre-stream setup
+	nodeCmds.HandleControllerConnected(controllerServer)
 
 	ctx := stream.Context()
-	doneChan := make(chan bool)
+	sendChanDone := make(chan bool)
+	closeChan := make(chan bool)
+	exitChan := make(chan bool)
 	nodeCmds.SendChan = make(chan *pb.StreamFromNode)
 
-	// Thread for sending hello command
+	// Thread for sending commands
 	go func() {
 		for {
 			select {
-			case <-doneChan:
+			case <-sendChanDone:
+				if err := stream.CloseSend(); err != nil {
+					log.Println(err)
+				}
 				return
 			case command := <-nodeCmds.SendChan:
 				if err := stream.Send(command); err != nil {
 					log.Printf("can not send %v", err)
-					doneChan <- true
+					continue
 				}
-				log.Printf("command sent: %v", command)
+				// log.Printf("command sent: %v", command.Response)
 			}
 		}
-		// if err := stream.CloseSend(); err != nil {
-		// 	log.Println(err)
-		// }
 	}()
 
 	// Thread for reciving commands
-	// if stream is finished it closes done channel
 	go func() {
 		for {
 			in, err := stream.Recv()
-			if err == io.EOF {
-				close(doneChan)
-				return
-			}
 			if err != nil {
-				log.Printf("can not receive %v", err)
-				doneChan <- true
+				switch err {
+				case io.EOF:
+					close(closeChan)
+				default:
+					close(closeChan)
+				}
 				return
 			}
-			nodeCmds.HandleIncomingCommand(in.FromUuid, in.Command)
+			var fromUuid uuid.UUID
+			if in.FromUuid != nil {
+				if fromUuid, err = uuid.FromString(*in.FromUuid); err != nil {
+					continue
+				}
+			}
+			nodeCmds.HandleIncomingCommand(&fromUuid, in.Command)
 		}
 	}()
 
-	// third goroutine closes done channel
-	// if context is done
+	// Closes exit channel if context is done
 	go func() {
 		<-ctx.Done()
-		if err := ctx.Err(); err != nil {
-			log.Println(err)
+		if err := contextError(ctx); err != nil {
+			log.Printf("Context Error: %v", err)
 		}
-		close(doneChan)
+		close(sendChanDone)
+		close(exitChan)
+		nodeCmds.HandleControllerDisconnected()
 	}()
 
-	nodeCmds.ControllerHello()
-	<-doneChan
-	log.Printf("node exited")
+	nodeCmds.HandleControllerReady()
+	<-closeChan
+	if conn != nil {
+		conn.Close()
+	}
+	<-exitChan
+	log.Printf("node exited\n")
 }
 
 func main() {
-	var err error
-	nodeUuid, err = uuid.NewV4()
-	if err != nil {
-		atexit.Fatalln(err)
+	app := &cli.App{
+		Flags: []cli.Flag{
+			&cli.StringSliceFlag{
+				Name:    configs.ArgNodeFlagControllers,
+				Value:   cli.NewStringSlice(configs.DefaultNodeConnectController),
+				EnvVars: configs.ArgEnvNodeControllers[:],
+				Usage:   "one or more controller addresses to connect to",
+			},
+			&cli.StringSliceFlag{
+				Name:    configs.ArgNodeKnownCurrencyPairs,
+				Value:   cli.NewStringSlice(configs.DefaultNodeKnownCurrencyPairs...),
+				EnvVars: configs.ArgEnvNodeKnownCurrencyPairs[:],
+				Usage:   "one or more currency pairs that this node supports",
+			},
+			&cli.BoolFlag{
+				Name:    configs.ArgNodeFlagVerbose,
+				Value:   false,
+				EnvVars: configs.ArgEnvNodeVerbose[:],
+				Usage:   "turn on verbose logging",
+			},
+			&cli.StringFlag{
+				Name:    configs.ArgNodeFlagName,
+				EnvVars: configs.ArgEnvNodeName[:],
+				Usage:   "name for this node",
+			},
+			&cli.StringFlag{
+				Name:    configs.ArgNodeFlagUuid,
+				EnvVars: configs.ArgEnvNodeUuid[:],
+				Usage:   "UUID for this node",
+			},
+		},
+		Commands: []*cli.Command{
+			{
+				Name:    "version",
+				Aliases: []string{"v"},
+				Usage:   "display cli app version",
+				Action: func(cCtx *cli.Context) error {
+					return nodeLocalVersion()
+				},
+			},
+			{
+				Name:    "start",
+				Aliases: []string{"v"},
+				Usage:   "start this node",
+				Action: func(cCtx *cli.Context) error {
+					if err := handleArgs(cCtx); err != nil {
+						return err
+					}
+					return nodeStart()
+				},
+			},
+		},
 	}
-	configs.NodeCfg.NodeUUID = &nodeUuid
-	configs.NodeCfg.ControllerServer = fmt.Sprintf("%s:%d", controllerAddr, controllerPort)
-	configs.NodeCfg.AppVersion = appVersion
-	configs.NodeCfg.StreamUpdates = true
 
-	// Use backoff so we can have a configurable stratergy later for reconnections
-	b := backoff.NewConstantBackOff(4 * time.Second)
-	for {
-		if ticker == nil {
-			ticker = backoff.NewTicker(b)
-		}
-		<-ticker.C
-		connectController(controllerAddr, controllerPort)
+	seededRand = rand.New(rand.NewSource(time.Now().UnixNano()))
+	nodeCmds.SeededRand = seededRand
+	if err := app.Run(os.Args); err != nil {
+		atexit.Fatalf("ERROR: %v", err)
 	}
 }

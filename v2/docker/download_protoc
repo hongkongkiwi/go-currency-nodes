@@ -1,0 +1,25 @@
+#!/bin/sh -u
+
+PB_REL="https://github.com/protocolbuffers/protobuf/releases"
+# Version 3 has weird numbering
+PB_VER="${PB_VER:-"21.12"}"
+
+OUTPUT_DIR="${1:-"/opt/protobuf"}"
+SYS_OS="${SYS_OS:-"linux"}"
+SYS_ARCH="$(arch)"
+if [ "$SYS_ARCH" = "arm64" ]; then
+  SYS_ARCH="aarch_64"
+elif [ "$SYS_ARCH" = "amd64" ]; then
+	SYS_ARCH="x86_64"
+elif [ "$SYS_ARCH" = "aarch64" ]; then
+  SYS_ARCH="aarch_64"
+fi
+
+FILENAME="protoc-${PB_VER}-${SYS_OS}-${SYS_ARCH}.zip"
+rm -f "$FILENAME"
+echo curl -LO "${PB_REL}/download/v${PB_VER}/${FILENAME}"
+curl -LO "${PB_REL}/download/v${PB_VER}/${FILENAME}" || exit 1
+mkdir -p "$OUTPUT_DIR"
+unzip "$FILENAME" -d "$OUTPUT_DIR"
+"$OUTPUT_DIR/bin/protoc" --version
+rm -f "$FILENAME"

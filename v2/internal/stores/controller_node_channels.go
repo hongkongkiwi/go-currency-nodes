@@ -33,7 +33,7 @@ func NewInMemoryUUIDChannelBoolStore() *InMemoryUUIDChannelBoolStore {
 	}
 }
 
-// Sets a uuid from UUID reference
+// Sets a uuid from UUID string
 func (store *InMemoryUUIDChannelInterfaceStore) SetWithUUIDString(uuidString string, channel chan interface{}) error {
 	store.mutex.Lock()
 	defer store.mutex.Unlock()
@@ -277,40 +277,4 @@ func (store *InMemoryUUIDChannelBoolStore) KeysAsString() []string {
 		i++
 	}
 	return keysStrArr
-}
-
-type CliReplyCount struct {
-	mutex  sync.RWMutex
-	counts map[string]uint32
-}
-
-func NewCliReplyCount() *CliReplyCount {
-	return &CliReplyCount{
-		counts: make(map[string]uint32),
-	}
-}
-
-func (c *CliReplyCount) Add(uuidString string) {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-	existing := c.counts[uuidString]
-	existing++
-	fmt.Printf("added existing %d\n", existing)
-	c.counts[uuidString] = existing
-}
-
-func (c *CliReplyCount) Clear(uuidString string) {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-	c.counts[uuidString] = 0
-}
-
-func (c *CliReplyCount) Get(uuidString string) uint32 {
-	return c.counts[uuidString]
-}
-
-func (c *CliReplyCount) Delete(uuidString string) {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-	delete(c.counts, uuidString)
 }
