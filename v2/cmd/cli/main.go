@@ -40,6 +40,7 @@ func connectController(controller string) error {
 	ctx := stream.Context()
 
 	log.Printf("Connected to Controller %s", controller)
+	log.Printf("NOTE: Cli client will NOT automatically disconnect from some commands, please use Control-C to exit")
 
 	// Thread for sending hello command
 	go func() {
