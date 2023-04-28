@@ -7,7 +7,7 @@ This example system might be useful in the case of calling external APIs and hav
 
 There are two major versions:
 
-## [Version v1](https://github.com/hongkongkiwi/go-currency-nodes/v1)
+## [Version v1](https://github.com/hongkongkiwi/go-currency-nodes/tree/main/v1)
 
 This version uses gRPC Unary Protocol to send messages back and forth between controller and nodes. 
 
@@ -15,7 +15,7 @@ The nodes start streaming immediately and there is not retrying on any sent mess
 
 This version requires Firewall ports to be open on each node, so the connection is Dual Unary for some commands.
 
-## [Version v2](https://github.com/hongkongkiwi/go-currency-nodes/v2)
+## [Version v2](https://github.com/hongkongkiwi/go-currency-nodes/tree/main/v2)
 
 This version implements gRPC Bidirectional streaming with a generic message wrapper.
 
