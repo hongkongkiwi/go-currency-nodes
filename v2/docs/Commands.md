@@ -1,11 +1,3 @@
-## Limitations
-
-Only a single controller can be run (in theory more can be run but they will be completely standalone).
-
-Multiple nodes with overlapping currency pairs can be run.
-
-The Cli client does not handle streaming, only a few basic commands for demonstration.
-
 ## Connection Flow
 
 Controller awaits connections from two types of clients:
