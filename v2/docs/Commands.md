@@ -24,6 +24,8 @@ There is no state stored on the Node, excepting a NodeLatestPricesApi simulator 
 
 If a Node goes offline, then the controller will see if any other nodes are capable of hnadling the stream and ask them to stream. So, there is no gaurrentee this Node will be asked to stream again when reconnecting.
 
+If the controller goes offline, then the node will continuously attempt to reconnect. When the node reconnects, there is no gaurrentee that the same node will be picked to stream the currency pairs (since it is randomly picked from online nodes for each currency pair).
+
 ## Protocol
 
 Due to the nature of gRPC and to keep things more simple we will setup a single stream and push commands back and forth along this.
