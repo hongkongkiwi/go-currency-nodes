@@ -76,6 +76,8 @@ message StreamToCli {
 
 #### Commands
 
+These are sent from controller to node
+
 | Command  | Response  | Description |
 | -------- | --------- | ----------- |
 | [NodeStatusV1Req](https://github.com/hongkongkiwi/go-currency-nodes/blob/main/v2/proto/commands.proto) | [NodeStatusV1Reply](https://github.com/hongkongkiwi/go-currency-nodes/blob/main/v2/proto/commands.proto) | Node sends it's current status |
@@ -84,27 +86,20 @@ message StreamToCli {
 
 #### Notifications
 
+These are sent from the node to controller
+
 | Notification | Direction | Description |
 | ------------ | --------- | ----------- |   
 | [NodeKnownCurrenciesV1Notify](https://github.com/hongkongkiwi/go-currency-nodes/blob/main/v2/proto/commands.proto) | Outgoing | Node sends known currencies (send after connection) |
 | [NodePriceUpdateV1Notify](https://github.com/hongkongkiwi/go-currency-nodes/blob/main/v2/proto/commands.proto) | Outgoing | Node sends a price update (only sent for streaming currencites) |
 | [UnknownCommandV1Notify](https://github.com/hongkongkiwi/go-currency-nodes/blob/main/v2/proto/commands.proto) | Outgoing | Node sends this when it receives an unhandled command |
 
-## Cli Commands
-
-Supports all above Node commands and additionally:
+## Controller
 
 #### Commands
 
 | Command  | Response  | Description |
 | -------- | --------- | ----------- |
 | [ControllerListNodesV1Req](https://github.com/hongkongkiwi/go-currency-nodes/blob/main/v2/proto/commands.proto) | [ControllerListNodesV1Reply](https://github.com/hongkongkiwi/go-currency-nodes/blob/main/v2/proto/commands.proto) | Requests the controller to list all Nodes (uuids) |
-| [ControllerKickNodesV1Req](https://github.com/hongkongkiwi/go-currency-nodes/blob/main/v2/proto/commands.proto) | [ControllerKickNodesV1Reply](https://github.com/hongkongkiwi/go-currency-nodes/blob/main/v2/proto/commands.proto) | Requests the controller to kick a node (nodes will automatically reconnect) |
+| [ControllerKickNodesV1Req](https://github.com/hongkongkiwi/go-currency-nodes/blob/main/v2/proto/commands.proto) | [ControllerKickNodesV1Reply](https://github.com/hongkongkiwi/go-currency-nodes/blob/main/v2/proto/commands.proto) | Requests the controller to kick a node (nodes will automatically reconnect) - Not currently implemented in CLI client due to time |
 | [ControllerAppVersionV1Req](https://github.com/hongkongkiwi/go-currency-nodes/blob/main/v2/proto/commands.proto) | [ControllerAppVersionV1Reply](https://github.com/hongkongkiwi/go-currency-nodes/blob/main/v2/proto/commands.proto) | Request the controller to send it's app version |
-
-#### Notifications
-
-| Notification | Direction | Description |
-| ------------ | --------- | ----------- |   
-| [CliResponseCountV1Notify](https://github.com/hongkongkiwi/go-currency-nodes/blob/main/v2/proto/commands.proto) | Incoming | Controller sends this so the Cli client knows how many resopnses to wait for |
-
