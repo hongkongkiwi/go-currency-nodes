@@ -78,17 +78,17 @@ message StreamToCli {
 
 | Command  | Response  | Description |
 | -------- | --------- | ----------- |
-| NodeStatusV1Req | NodeStatusV1Reply | Node sends it's current status |
-| NodeStreamModifyStateV1Req | NodeStreamModifyStateV1Reply | Node will start or stop streaming depending on requests from controller. Any currencies not specifically specified is stopped. |
-| NodeShutdownV1Req | NodeShutdownV1Reply | Node will shutdown connection gracefully then exit |
+| [NodeStatusV1Req](https://github.com/hongkongkiwi/go-currency-nodes/blob/main/v2/proto/commands.proto) | [NodeStatusV1Reply](https://github.com/hongkongkiwi/go-currency-nodes/blob/main/v2/proto/commands.proto) | Node sends it's current status |
+| [NodeStreamModifyStateV1Req](https://github.com/hongkongkiwi/go-currency-nodes/blob/main/v2/proto/commands.proto) | [NodeStreamModifyStateV1Reply](https://github.com/hongkongkiwi/go-currency-nodes/blob/main/v2/proto/commands.proto) | Node will start or stop streaming depending on requests from controller. Any currencies not specifically specified is stopped. |
+| [NodeShutdownV1Req](https://github.com/hongkongkiwi/go-currency-nodes/blob/main/v2/proto/commands.proto) | [NodeShutdownV1Reply](https://github.com/hongkongkiwi/go-currency-nodes/blob/main/v2/proto/commands.proto) | Node will shutdown connection gracefully then exit |
 
 #### Notifications
 
 | Notification | Direction | Description |
 | ------------ | --------- | ----------- |   
-| NodeKnownCurrenciesV1Notify | Outgoing | Node sends known currencies (send after connection) |
-| NodePriceUpdateV1Notify | Outgoing | Node sends a price update (only sent for streaming currencites) |
-| UnknownCommandV1Notify | Outgoing | Node sends this when it receives an unhandled command |
+| [NodeKnownCurrenciesV1Notify](https://github.com/hongkongkiwi/go-currency-nodes/blob/main/v2/proto/commands.proto) | Outgoing | Node sends known currencies (send after connection) |
+| [NodePriceUpdateV1Notify](https://github.com/hongkongkiwi/go-currency-nodes/blob/main/v2/proto/commands.proto) | Outgoing | Node sends a price update (only sent for streaming currencites) |
+| [UnknownCommandV1Notify](https://github.com/hongkongkiwi/go-currency-nodes/blob/main/v2/proto/commands.proto) | Outgoing | Node sends this when it receives an unhandled command |
 
 ## Cli Commands
 
@@ -98,13 +98,13 @@ Supports all above Node commands and additionally:
 
 | Command  | Response  | Description |
 | -------- | --------- | ----------- |
-| ControllerListNodesV1Req | ControllerListNodesV1Reply | Requests the controller to list all Nodes (uuids) |
-| ControllerKickNodesV1Req | ControllerKickNodesV1Reply | Requests the controller to kick a node (nodes will automatically reconnect) |
-| ControllerAppVersionV1Req | ControllerAppVersionV1Reply | Request the controller to send it's app version |
+| [ControllerListNodesV1Req](https://github.com/hongkongkiwi/go-currency-nodes/blob/main/v2/proto/commands.proto) | [ControllerListNodesV1Reply](https://github.com/hongkongkiwi/go-currency-nodes/blob/main/v2/proto/commands.proto) | Requests the controller to list all Nodes (uuids) |
+| [ControllerKickNodesV1Req](https://github.com/hongkongkiwi/go-currency-nodes/blob/main/v2/proto/commands.proto) | [ControllerKickNodesV1Reply](https://github.com/hongkongkiwi/go-currency-nodes/blob/main/v2/proto/commands.proto) | Requests the controller to kick a node (nodes will automatically reconnect) |
+| [ControllerAppVersionV1Req](https://github.com/hongkongkiwi/go-currency-nodes/blob/main/v2/proto/commands.proto) | [ControllerAppVersionV1Reply](https://github.com/hongkongkiwi/go-currency-nodes/blob/main/v2/proto/commands.proto) | Request the controller to send it's app version |
 
 #### Notifications
 
 | Notification | Direction | Description |
 | ------------ | --------- | ----------- |   
-| CliResponseCountV1Notify | Incoming | Controller sends this so the Cli client knows how many resopnses to wait for |
+| [CliResponseCountV1Notify](https://github.com/hongkongkiwi/go-currency-nodes/blob/main/v2/proto/commands.proto) | Incoming | Controller sends this so the Cli client knows how many resopnses to wait for |
 
